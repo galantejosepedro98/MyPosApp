@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.kreiseck.my_pos">
+
+    <queries>
+        <package android:name="com.mypos" />
+        <package android:name="com.mypos.top" />
+    </queries>
+
+</manifest>

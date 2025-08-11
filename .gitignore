@@ -1,0 +1,19 @@
+# Flutter/Dart essentials
+build/
+.dart_tool/
+
+# Arquivos temporários e caches
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.metadata
+
+# Builds Android específicos
+android/app/.cxx/
+android/.gradle/
+android/local.properties
+
+# Keystores (segurança)
+*.jks
+*.keystore
+key.properties
