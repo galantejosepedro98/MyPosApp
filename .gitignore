@@ -13,7 +13,3 @@ android/app/.cxx/
 android/.gradle/
 android/local.properties
 
-# Keystores (segurança)
-*.jks
-*.keystore
-key.properties
