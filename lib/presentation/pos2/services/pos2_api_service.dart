@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pos2_event.dart';
-import '../models/pos2_product.dart';
 import 'pos2_debug_helper.dart';
 
 class POS2ApiService {
@@ -289,6 +288,88 @@ class POS2ApiService {
           {'value': 'Transfer', 'label': 'Transferência'},
           {'value': 'Other', 'label': 'Outro'},
         ],
+      };
+    }
+  }
+
+  /// Buscar informações de um bilhete pelo código QR (Scanner Universal)
+  static Future<Map<String, dynamic>> getTicketByCode(String ticketCode) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${baseUrl}tickets/get'),
+        headers: await headers,
+        body: jsonEncode({
+          'ticket': ticketCode,
+        }),
+      );
+
+      POS2DebugHelper.logApi('tickets/get', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'data': data,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Bilhete não encontrado',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao buscar bilhete por código', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
+  
+  /// Levantar um extra associado a um bilhete
+  static Future<Map<String, dynamic>> withdrawExtra(String ticketCode, int extraId, {int quantity = 1}) async {
+    try {
+      POS2DebugHelper.log('Tentando levantar extra via API /api/pos2/withdraw-extra');
+      
+      final response = await http.post(
+        Uri.parse('${baseUrl}pos2/withdraw-extra'),
+        headers: await headers,
+        body: jsonEncode({
+          'ticket': ticketCode,
+          'extra_id': extraId,
+          'quantity': quantity,
+        }),
+      );
+
+      POS2DebugHelper.logApi('pos2/withdraw-extra', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return {
+            'success': true,
+            'data': data['data'] ?? {},
+            'message': 'Extra levantado com sucesso!',
+          };
+        } else {
+          return {
+            'success': false,
+            'message': data['message'] ?? 'Erro ao levantar extra',
+          };
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao levantar extra',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao levantar extra', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
       };
     }
   }

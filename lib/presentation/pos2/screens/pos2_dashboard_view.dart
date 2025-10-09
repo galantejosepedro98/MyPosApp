@@ -386,12 +386,10 @@ class _POS2DashboardViewState extends State<POS2DashboardView> {
                             ),
                           ),
                           const SizedBox(width: 16),
-                          Text(
-                            'Stock: ${product['quantity'] ?? 0}',
+                          const Text(
+                            'Stock: Ilimitado',
                             style: TextStyle(
-                              color: (product['quantity'] ?? 0) > 0 
-                                  ? Colors.blue 
-                                  : Colors.red,
+                              color: Colors.blue,
                             ),
                           ),
                         ],
@@ -399,9 +397,7 @@ class _POS2DashboardViewState extends State<POS2DashboardView> {
                     ],
                   ),
                   trailing: ElevatedButton(
-                    onPressed: (product['quantity'] ?? 0) > 0
-                        ? () => _addToCart(product)
-                        : null,
+                    onPressed: () => _addToCart(product),
                     child: const Text('Adicionar'),
                   ),
                 ),

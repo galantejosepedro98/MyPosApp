@@ -29,12 +29,12 @@ class POS2Product {
 
   factory POS2Product.fromJson(Map<String, dynamic> json) {
     return POS2Product(
-      id: json['id'] as int,
-      name: json['name'] as String,
+      id: json['id'] ?? 0,
+      name: json['name'] ?? 'Produto',
       description: json['description'] as String?,
       price: (json['price'] ?? 0).toDouble(),
-      quantity: json['quantity'] as int,
-      eventId: json['event_id'] as int,
+      quantity: json['quantity'] ?? 0,
+      eventId: json['event_id'] ?? 0,
       active: json['active'] == 1 || json['active'] == true,
       dates: json['dates'] != null 
           ? List<String>.from(json['dates']) 
@@ -83,7 +83,7 @@ class POS2Extra {
   final String name;
   final String? description;
   final double price;
-  final int quantity;
+  final int quantity; // Quantidade/stock - sempre 999 para extras (ilimitado)
   final int eventId;
   final bool active;
   final String? image;
@@ -95,7 +95,7 @@ class POS2Extra {
     required this.name,
     this.description,
     required this.price,
-    required this.quantity,
+    this.quantity = 999, // Padrão: extras têm stock ilimitado
     required this.eventId,
     required this.active,
     this.image,
@@ -105,13 +105,13 @@ class POS2Extra {
 
   factory POS2Extra.fromJson(Map<String, dynamic> json) {
     return POS2Extra(
-      id: json['id'] as int,
-      name: json['name'] as String,
+      id: json['id'] ?? 0,
+      name: json['name'] ?? 'Extra',
       description: json['description'] as String?,
       price: (json['price'] ?? 0).toDouble(),
-      quantity: json['quantity'] as int,
-      eventId: json['event_id'] as int,
-      active: json['active'] == 1 || json['active'] == true,
+      quantity: 999, // EXTRAS SEMPRE TÊM STOCK ILIMITADO - não há controlo de stock
+      eventId: json['event_id'] ?? 0,
+      active: json['status'] == 1 || json['active'] == 1 || json['active'] == true,
       image: json['image'] as String?,
       vendusItemCode: json['vendus_item_code'] as String?,
       vendusItemId: json['vendus_item_id'] as String?,

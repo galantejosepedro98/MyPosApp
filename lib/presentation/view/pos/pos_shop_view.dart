@@ -107,8 +107,8 @@ class _PosShopViewState extends State<PosShopView> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                // Navegar para POS2
-                Navigator.pushReplacementNamed(context, '/pos2/dashboard');
+                // Navegar para POS2 Moderno
+                Navigator.pushReplacementNamed(context, '/pos2/modern');
               },
               child: const Text('POS 2.0\n(Avançado)'),
             ),

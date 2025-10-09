@@ -8,6 +8,7 @@ import 'package:essenciacompany_mobile/presentation/view/pos/orders_view.dart';
 import 'package:essenciacompany_mobile/presentation/view/pos/pos_shop_view.dart';
 import 'package:essenciacompany_mobile/presentation/view/staff_withdraw/staff_withdraw_view.dart';
 import 'package:essenciacompany_mobile/presentation/pos2/screens/pos2_dashboard_view.dart';
+import 'package:essenciacompany_mobile/presentation/pos2/screens/pos2_modern_dashboard.dart';
 import 'package:essenciacompany_mobile/presentation/pos2/providers/pos2_cart_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -42,8 +43,9 @@ class MyApp extends StatelessWidget {
         '/check-qr': (context) => const CheckQrView(),
         '/staff-withdraw': (context) => const StaffWithdrawView(),
         
-        // NOVA rota POS2
+        // ROTAS POS2
         '/pos2/dashboard': (context) => const POS2DashboardView(),
+        '/pos2/modern': (context) => const POS2ModernDashboard(),
       },
       ),
     );
