@@ -179,6 +179,12 @@ class _POS2DashboardViewState extends State<POS2DashboardView> {
         actions: [
           if (_selectedEvent != null)
             IconButton(
+              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: () => Navigator.pushNamed(context, '/pos2/scanner'),
+              tooltip: 'Scanner Universal',
+            ),
+          if (_selectedEvent != null)
+            IconButton(
               icon: const Icon(Icons.swap_horiz),
               onPressed: changeEvent,
               tooltip: 'Trocar Evento',
