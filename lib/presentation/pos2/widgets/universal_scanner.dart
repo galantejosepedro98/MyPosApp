@@ -103,6 +103,13 @@ class _UniversalScannerState extends State<UniversalScanner> {
           await _fetchEventExtras(ticketData['event_id']);
         }
         
+        // Verificar se há extras no bilhete e formatar corretamente
+        if (ticketData['extras'] != null) {
+          POS2DebugHelper.log('Extras encontrados no bilhete: ${ticketData['extras']}');
+        } else {
+          POS2DebugHelper.log('Nenhum extra encontrado no bilhete.');
+        }
+        
         // Callback para o componente pai
         if (widget.onScanResult != null) {
           widget.onScanResult!(ticketData);
@@ -189,6 +196,14 @@ class _UniversalScannerState extends State<UniversalScanner> {
     try {
       POS2DebugHelper.log('Levantando extra $extraId do bilhete $ticketCode');
       
+      // Usar o formato correto de parâmetros para a API
+      Map<String, dynamic> withdraw = {
+        '$extraId': 1  // Levantar 1 unidade do extra
+      };
+      
+      // Log dos dados que serão enviados
+      POS2DebugHelper.log('Enviando dados para levantar extra: ticket=$ticketCode, withdraw=$withdraw');
+      
       final result = await POS2ApiService.withdrawExtra(ticketCode, int.parse(extraId.toString()));
       
       if (result['success']) {
@@ -206,6 +221,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
         final updatedTicket = await POS2ApiService.getTicketByCode(ticketCode);
         if (updatedTicket['success'] && mounted) {
           setState(() => _scannedTicket = updatedTicket['data']);
+          POS2DebugHelper.log('Bilhete atualizado após levantar extra: ${updatedTicket['data']}');
         }
       } else {
         // Mostrar mensagem de erro

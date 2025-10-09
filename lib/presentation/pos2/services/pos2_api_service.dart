@@ -307,6 +307,21 @@ class POS2ApiService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        
+        // Se não existir a propriedade extras ou se ela estiver vazia, buscar extras específicos
+        if (data['extras'] == null || 
+            (data['extras'] is Map && data['extras'].isEmpty) || 
+            (data['extras'] is List && data['extras'].isEmpty)) {
+          
+          // Buscar extras específicos do bilhete usando a API padrão do sistema
+          final extrasResponse = await getTicketExtras(ticketCode);
+          
+          if (extrasResponse['success'] && extrasResponse['extras'] != null) {
+            // Adicionar extras ao response
+            data['extras'] = extrasResponse['extras'];
+          }
+        }
+        
         return {
           'success': true,
           'data': data,
@@ -327,9 +342,53 @@ class POS2ApiService {
     }
   }
   
+  /// Buscar extras específicos de um bilhete (usa a mesma API que o staff-withdraw)
+  static Future<Map<String, dynamic>> getTicketExtras(String ticketCode) async {
+    try {
+      POS2DebugHelper.log('Buscando extras específicos do bilhete: $ticketCode');
+      
+      final response = await http.post(
+        Uri.parse('${baseUrl}extras'),
+        headers: await headers,
+        body: jsonEncode({
+          'ticket': ticketCode,
+        }),
+      );
+
+      POS2DebugHelper.logApi('extras', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        // Formatar os extras para o formato esperado
+        final extras = data['extras'] ?? [];
+        
+        return {
+          'success': true,
+          'ticket': data['ticket'],
+          'extras': extras,
+          'message': data['message'] ?? 'Extras encontrados',
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao buscar extras do bilhete',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao buscar extras do bilhete', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
+  
   /// Levantar um extra associado a um bilhete
   static Future<Map<String, dynamic>> withdrawExtra(String ticketCode, int extraId, {int quantity = 1}) async {
     try {
+      // Primeiro, tentar com o endpoint específico do POS2
       POS2DebugHelper.log('Tentando levantar extra via API /api/pos2/withdraw-extra');
       
       final response = await http.post(
@@ -343,7 +402,8 @@ class POS2ApiService {
       );
 
       POS2DebugHelper.logApi('pos2/withdraw-extra', response.statusCode, body: response.body);
-
+      
+      // Se for bem-sucedido, retornar os dados
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
@@ -353,11 +413,48 @@ class POS2ApiService {
             'message': 'Extra levantado com sucesso!',
           };
         } else {
-          return {
-            'success': false,
-            'message': data['message'] ?? 'Erro ao levantar extra',
-          };
+          // Se falhar, tentar com o endpoint padrão
+          return await _withdrawExtraLegacy(ticketCode, extraId, quantity: quantity);
         }
+      } else {
+        // Se falhar, tentar com o endpoint padrão
+        return await _withdrawExtraLegacy(ticketCode, extraId, quantity: quantity);
+      }
+    } catch (e) {
+      // Em caso de erro, tentar com o endpoint padrão
+      POS2DebugHelper.logError('Erro ao levantar extra via POS2 API', error: e);
+      return await _withdrawExtraLegacy(ticketCode, extraId, quantity: quantity);
+    }
+  }
+  
+  /// Método legado para levantar extras usando a API padrão do sistema
+  static Future<Map<String, dynamic>> _withdrawExtraLegacy(String ticketCode, int extraId, {int quantity = 1}) async {
+    try {
+      POS2DebugHelper.log('Tentando levantar extra via API padrão /api/app/withdraw');
+      
+      // Formatar no formato que a API padrão espera
+      Map<String, dynamic> withdraw = {
+        '$extraId': quantity
+      };
+      
+      final response = await http.post(
+        Uri.parse('${baseUrl}withdraw'),
+        headers: await headers,
+        body: jsonEncode({
+          'ticket': ticketCode,
+          'withdraw': withdraw,
+        }),
+      );
+
+      POS2DebugHelper.logApi('withdraw (legacy)', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'data': data['data'] ?? {},
+          'message': data['message'] ?? 'Extra levantado com sucesso!',
+        };
       } else {
         final errorData = jsonDecode(response.body);
         return {
@@ -366,7 +463,7 @@ class POS2ApiService {
         };
       }
     } catch (e) {
-      POS2DebugHelper.logError('Erro ao levantar extra', error: e);
+      POS2DebugHelper.logError('Erro ao levantar extra via API legada', error: e);
       return {
         'success': false,
         'message': 'Erro de conexão: $e',
