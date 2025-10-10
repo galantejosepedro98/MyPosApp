@@ -58,7 +58,7 @@ class POS2PermissionHelper {
     
     if (hasTickets) {
       POS2DebugHelper.log('✅ Usuário tem permissão para tickets - usando POS2');
-      return '/pos2/dashboard';
+      return '/pos2/modern';
     } else {
       POS2DebugHelper.log('ℹ️ Usuário sem permissão para tickets - usando sistema atual');
       return '/pos/shop';

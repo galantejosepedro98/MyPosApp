@@ -56,25 +56,70 @@ class POS2ApiService {
     }
   }
 
-  /// Buscar bilhetes/produtos de um evento (POS2 API)
-  static Future<Map<String, dynamic>> getTickets(int eventId) async {
+  /// Limpar o cache de dados da API
+  static Future<bool> clearCache() async {
     try {
-      // Usar a API da app que funciona com Sanctum auth
+      final prefs = await SharedPreferences.getInstance();
+      // Encontra todas as chaves que começam com 'pos2_cache_'
+      final keys = prefs.getKeys().where((key) => key.startsWith('pos2_cache_')).toList();
+      
+      // Remove cada chave do cache
+      for (final key in keys) {
+        await prefs.remove(key);
+      }
+      
+      POS2DebugHelper.log('Cache API limpo: ${keys.length} entradas removidas');
+      return true;
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao limpar cache', error: e);
+      return false;
+    }
+  }
+
+  /// Buscar bilhetes/produtos de um evento (POS2 API)
+  static Future<Map<String, dynamic>> getTickets(int eventId, {bool forceRefresh = false, DateTime? timestamp}) async {
+    try {
+      // Gerar chave de cache
+      final cacheKey = 'pos2_cache_tickets_$eventId';
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Verificar se temos dados em cache (e se não estamos forçando refresh)
+      if (!forceRefresh && prefs.containsKey(cacheKey)) {
+        final cachedData = prefs.getString(cacheKey);
+        if (cachedData != null) {
+          final data = jsonDecode(cachedData);
+          POS2DebugHelper.log('Bilhetes carregados do cache: ${data['data']?.length ?? 0}');
+          return data;
+        }
+      }
+      
+      // Se forçar refresh ou não tiver cache, buscar da API
+      String url = '${baseUrl}pos2/tickets/$eventId';
+      if (timestamp != null) {
+        // Adicionar timestamp para evitar cache do servidor
+        url += '?t=${timestamp.millisecondsSinceEpoch}';
+      }
+      
       final response = await http.get(
-        Uri.parse('${baseUrl}pos2/tickets/$eventId'),
+        Uri.parse(url),
         headers: await headers,
       );
 
-      POS2DebugHelper.logApi('pos2/tickets/$eventId', response.statusCode);
+      POS2DebugHelper.logApi(url, response.statusCode);
       POS2DebugHelper.log('Resposta bilhetes: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        POS2DebugHelper.log('Bilhetes retornados: ${data['data']?.length ?? 0}');
-        return {
+        final result = {
           'success': true,
           'data': data['data'] ?? [],
         };
+        
+        // Salvar no cache
+        await prefs.setString(cacheKey, jsonEncode(result));
+        
+        POS2DebugHelper.log('Bilhetes retornados: ${result['data']?.length ?? 0}');
+        return result;
       } else {
         final errorData = jsonDecode(response.body);
         return {
@@ -92,23 +137,48 @@ class POS2ApiService {
   }
 
   /// Buscar extras de um evento (POS2 API)
-  static Future<Map<String, dynamic>> getExtras(int eventId) async {
+  static Future<Map<String, dynamic>> getExtras(int eventId, {bool forceRefresh = false, DateTime? timestamp}) async {
     try {
-      // Usar a API da app que funciona com Sanctum auth
+      // Gerar chave de cache
+      final cacheKey = 'pos2_cache_extras_$eventId';
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Verificar se temos dados em cache (e se não estamos forçando refresh)
+      if (!forceRefresh && prefs.containsKey(cacheKey)) {
+        final cachedData = prefs.getString(cacheKey);
+        if (cachedData != null) {
+          final data = jsonDecode(cachedData);
+          POS2DebugHelper.log('Extras carregados do cache: ${data['data']?.length ?? 0}');
+          return data;
+        }
+      }
+      
+      // Se forçar refresh ou não tiver cache, buscar da API
+      String url = '${baseUrl}pos2/extras/$eventId';
+      if (timestamp != null) {
+        // Adicionar timestamp para evitar cache do servidor
+        url += '?t=${timestamp.millisecondsSinceEpoch}';
+      }
+      
       final response = await http.get(
-        Uri.parse('${baseUrl}pos2/extras/$eventId'),
+        Uri.parse(url),
         headers: await headers,
       );
 
-      POS2DebugHelper.logApi('pos2/extras/$eventId', response.statusCode);
+      POS2DebugHelper.logApi(url, response.statusCode);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        POS2DebugHelper.log('Extras retornados: ${data['data']?.length ?? 0}');
-        return {
+        final result = {
           'success': true,
           'data': data['data'] ?? [],
         };
+        
+        // Salvar no cache
+        await prefs.setString(cacheKey, jsonEncode(result));
+        
+        POS2DebugHelper.log('Extras retornados: ${result['data']?.length ?? 0}');
+        return result;
       } else {
         final errorData = jsonDecode(response.body);
         return {

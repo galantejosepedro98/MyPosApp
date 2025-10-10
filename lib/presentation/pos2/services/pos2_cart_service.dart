@@ -252,4 +252,23 @@ class POS2CartService {
     }
     return 0.0;
   }
+  
+  /// Limpar o carrinho completamente
+  void clearCart() {
+    try {
+      // Limpar itens
+      _cartService.items.clear();
+      
+      // Resetar totais
+      _cartService.totalItems = 0;
+      _cartService.totalPrice = 0.0;
+      
+      // Atualizar carrinho
+      _cartService.updateCart();
+      
+      POS2DebugHelper.log('POS2CartService: Carrinho limpo com sucesso');
+    } catch (e) {
+      POS2DebugHelper.logError('POS2CartService ERROR: Falha ao limpar carrinho', error: e);
+    }
+  }
 }
