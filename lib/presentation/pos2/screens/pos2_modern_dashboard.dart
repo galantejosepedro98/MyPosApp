@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
+import '../services/pos2_cart_service.dart';
 import '../models/pos2_event.dart';
 import '../models/pos2_product.dart';
-import '../models/pos2_cart.dart';
-import '../providers/pos2_cart_provider.dart';
 import '../widgets/universal_scanner.dart';
+import 'pos2_cart_view.dart';
 
 class POS2ModernDashboard extends StatefulWidget {
   const POS2ModernDashboard({super.key});
@@ -52,10 +51,45 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
       setState(() => _loading = true);
       await _loadUserData();
       await _fetchEvents();
+      _syncCartWithUI();
     } catch (e) {
       _showError('Erro ao carregar dados: $e');
     } finally {
       setState(() => _loading = false);
+    }
+  }
+  
+  // Sincroniza o UI com o estado atual do carrinho
+  void _syncCartWithUI() {
+    final cartService = POS2CartService.instance;
+    final items = cartService.items;
+    
+    // Limpar quantidades atuais
+    _cartQuantities.clear();
+    
+    // Atualizar quantidades com base nos itens do carrinho
+    for (final item in items) {
+      final itemData = item['item'];
+      final type = itemData['type'] as String?;
+      int? id;
+      
+      if (type == 'ticket' && itemData['ticket_id'] != null) {
+        id = itemData['ticket_id'] as int?;
+      } else if (type == 'extra' && itemData['extra_id'] != null) {
+        id = itemData['extra_id'] as int?;
+      }
+      
+      if (id != null) {
+        final quantity = item['quantity'] as int? ?? 0;
+        if (quantity > 0) {
+          _cartQuantities[id] = quantity;
+        }
+      }
+    }
+    
+    // Atualizar UI
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -130,6 +164,9 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
       });
 
       POS2DebugHelper.log('Evento ${event.name}: ${_tickets.length} bilhetes, ${_extras.length} extras');
+      
+      // Sincronizar o estado do carrinho com a UI
+      _syncCartWithUI();
     } catch (e) {
       _showError('Erro ao carregar produtos: $e');
     } finally {
@@ -177,6 +214,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
   }
 
   Widget _buildHeader() {
+    final cartService = POS2CartService.instance;
     return Container(
       padding: const EdgeInsets.all(20),
       child: Row(
@@ -216,45 +254,49 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
               ],
             ),
           ),
-          Consumer<POS2CartProvider>(
-            builder: (context, cart, child) {
-              return Stack(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.shopping_cart,
-                      color: Colors.white,
-                      size: 24,
-                    ),
+          // Botão do carrinho
+          Stack(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const POS2CartView()),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  if (cart.itemCount > 0)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${cart.itemCount}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                  child: const Icon(
+                    Icons.shopping_cart,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
+              if (cartService.totalItems > 0)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${cartService.totalItems}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                ],
-              );
-            },
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -474,47 +516,29 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
     return UniversalScanner(
       selectedEventId: _selectedEvent?.id,
       onScanResult: (ticketData) {
-        POS2DebugHelper.log('Bilhete escaneado: ${ticketData['product_name']}');
+        POS2DebugHelper.log('Bilhete escaneado: ${ticketData['product_name'] ?? ticketData['name']}');
       },
       onAddToCart: (item) {
-        // Adicionar item escaneado ao carrinho usando o provider
-        final cartProvider = Provider.of<POS2CartProvider>(context, listen: false);
+        // Notificar o usuário sobre o item adicionado
+        String itemName = item['name'] ?? 'Item';
         
-        if (item['type'] == 'paid_invite_activation') {
-          // Criar produto fictício para ativação de convite
-          final activationProduct = POS2Product(
-            id: item['id'],
-            name: item['name'],
-            price: item['price'].toDouble(),
-            quantity: 1,
-            eventId: _selectedEvent?.id ?? 0,
-            active: true,
-          );
-          
-          cartProvider.addItem(
-            type: POS2CartItemType.ticket,
-            product: activationProduct,
-            quantity: 1,
-            metadata: {'type': 'paid_invite_activation', 'ticket_id': item['ticket_id']},
-          );
-        } else if (item['type'] == 'extra') {
-          final extra = POS2Extra(
-            id: item['id'],
-            name: item['name'],
-            price: item['price'].toDouble(),
-            eventId: item['metadata']['eventId'],
-            active: true,
-          );
-          
-          cartProvider.addItem(
-            type: POS2CartItemType.extra,
-            product: extra,
-            quantity: item['quantity'] ?? 1,
-            metadata: {'ticket_id': item['ticket_id'], 'scanned_from_qr': true},
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Item "$itemName" adicionado ao carrinho'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'VER CARRINHO',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const POS2CartView()),
+                );
+              },
+            ),
+          ),
+        );
         
-        POS2DebugHelper.log('Item do scanner adicionado ao carrinho: ${item['name']}');
+        POS2DebugHelper.log('Item do scanner adicionado ao carrinho: $itemName');
       },
     );
   }
@@ -759,12 +783,106 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
   }
 
   void _updateQuantity(int id, String name, int newQuantity, String type) {
-    setState(() {
-      if (newQuantity <= 0) {
+    final cartService = POS2CartService.instance;
+    
+    // Se a quantidade for zero, remover do carrinho
+    if (newQuantity <= 0) {
+      final itemId = type == 'ticket' ? 'ticket_$id' : 'extra_$id';
+      cartService.removeItem(itemId);
+      setState(() {
         _cartQuantities.remove(id);
-      } else {
-        _cartQuantities[id] = newQuantity;
+      });
+      
+      // Notificar o usuário
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$name removido do carrinho'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Obter a quantidade atual no carrinho
+    final currentQuantity = _cartQuantities[id] ?? 0;
+    
+    // Se for um aumento de quantidade
+    if (newQuantity > currentQuantity) {
+      // Encontrar o item para adicionar ao carrinho
+      if (type == 'ticket') {
+        // Procurar o bilhete na lista de bilhetes
+        POS2Product? ticket;
+        try {
+          ticket = _tickets.firstWhere((t) => t.id == id);
+        } catch (e) {
+          POS2DebugHelper.logError('Bilhete não encontrado', error: e);
+          return;
+        }
+        
+        // Adicionar ao carrinho
+        cartService.addTicket({
+          'id': id,
+          'product_name': ticket.name,
+          'price': ticket.price,
+          'event_id': _selectedEvent?.id,
+        });
+        
+        // Notificar o usuário
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bilhete "${ticket.name}" adicionado ao carrinho'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'VER CARRINHO',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const POS2CartView()),
+                );
+              },
+            ),
+          ),
+        );
+      } else if (type == 'extra') {
+        // Procurar o extra na lista de extras
+        POS2Extra? extra;
+        try {
+          extra = _extras.firstWhere((e) => e.id == id);
+        } catch (e) {
+          POS2DebugHelper.logError('Extra não encontrado', error: e);
+          return;
+        }
+        
+        // Adicionar ao carrinho
+        cartService.addExtra({
+          'id': id,
+          'name': extra.name,
+          'price': extra.price,
+          'event_id': _selectedEvent?.id,
+        });
+        
+        // Notificar o usuário
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Extra "${extra.name}" adicionado ao carrinho'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'VER CARRINHO',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const POS2CartView()),
+                );
+              },
+            ),
+          ),
+        );
       }
+    }
+    
+    // Atualizar estado local
+    setState(() {
+      _cartQuantities[id] = newQuantity;
     });
   }
 }

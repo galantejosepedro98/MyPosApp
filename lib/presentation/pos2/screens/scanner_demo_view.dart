@@ -13,7 +13,7 @@ class ScannerDemoView extends StatefulWidget {
 
 class _ScannerDemoViewState extends State<ScannerDemoView> {
   Map<String, dynamic>? _lastScanResult;
-  List<Map<String, dynamic>> _cartItems = [];
+  final List<Map<String, dynamic>> _cartItems = [];
 
   @override
   Widget build(BuildContext context) {
