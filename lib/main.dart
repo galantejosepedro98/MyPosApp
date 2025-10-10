@@ -9,6 +9,7 @@ import 'package:essenciacompany_mobile/presentation/view/pos/pos_shop_view.dart'
 import 'package:essenciacompany_mobile/presentation/view/staff_withdraw/staff_withdraw_view.dart';
 import 'package:essenciacompany_mobile/presentation/pos2/screens/pos2_dashboard_view.dart';
 import 'package:essenciacompany_mobile/presentation/pos2/screens/pos2_modern_dashboard.dart';
+import 'package:essenciacompany_mobile/presentation/pos2/screens/scanner_demo_view.dart';
 import 'package:essenciacompany_mobile/presentation/pos2/providers/pos2_cart_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -46,6 +47,7 @@ class MyApp extends StatelessWidget {
         // ROTAS POS2
         '/pos2/dashboard': (context) => const POS2DashboardView(),
         '/pos2/modern': (context) => const POS2ModernDashboard(),
+        '/pos2/scanner': (context) => const ScannerDemoView(),
       },
       ),
     );
