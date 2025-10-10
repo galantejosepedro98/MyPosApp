@@ -1,10 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/pos2_cart_service.dart';
-import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
+import '../services/pos2_permission_helper.dart';
+import '../widgets/pos2_loading_overlay.dart';
 
-/// Tela de checkout do sistema POS2
-/// Permite informar dados do cliente e finalizar a compra
+/// Tela de checkout para o sistema POS2
+/// Implementada de acordo com o design do website
 class POS2CheckoutView extends StatefulWidget {
   const POS2CheckoutView({super.key});
 
@@ -13,147 +15,221 @@ class POS2CheckoutView extends StatefulWidget {
 }
 
 class _POS2CheckoutViewState extends State<POS2CheckoutView> {
-  // Instância do serviço de carrinho
+  // Serviço de carrinho
   final POS2CartService _cartService = POS2CartService.instance;
   
-  // Estados para exibição
-  bool _isLoading = false;
-  String _selectedPaymentMethod = 'Cash';
-  final TextEditingController _customerNameController = TextEditingController();
-  final TextEditingController _customerEmailController = TextEditingController();
-  final TextEditingController _customerPhoneController = TextEditingController();
-  final TextEditingController _notesController = TextEditingController();
-
-  // Lista de métodos de pagamento
-  List<Map<String, String>> _paymentMethods = [
-    {'value': 'Cash', 'label': 'Dinheiro'},
-    {'value': 'Card', 'label': 'Cartão'},
-    {'value': 'Transfer', 'label': 'Transferência'},
-    {'value': 'Other', 'label': 'Outro'},
-  ];
+  // Form key para validação
+  final _formKey = GlobalKey<FormState>();
+  
+  // Estado da tela
+  bool _isProcessing = false;
+  bool _isLoading = true;
+  String? _errorMessage;
+  
+  // Controladores para campos de texto
+  final _customerNameController = TextEditingController();
+  final _customerEmailController = TextEditingController();
+  final _customerPhoneController = TextEditingController();
+  final _notesController = TextEditingController();
+  final _customerVatNumberController = TextEditingController();
+  final _paidAmountController = TextEditingController();
+  
+  // Payment method
+  String _selectedPaymentMethod = 'card'; // Padrão é cartão
+  
+  // Opções adicionais
+  bool _sendToMail = false;
+  bool _sendToPhone = true; // SMS habilitado por padrão
+  bool _printInvoice = false;
+  bool _sendInvoiceEmail = false;
+  bool _withdraw = false;
+  bool _physicalQr = false;
+  double _paidAmount = 0.0;
+  
+  // Métodos de pagamento disponíveis
+  List<String> _availablePaymentMethods = ['card', 'cash', 'transfer'];
 
   @override
   void initState() {
     super.initState();
-    _loadPaymentMethods();
+    _paidAmountController.text = _cartService.totalPrice.toStringAsFixed(2);
+    _loadPosData();
   }
-
-  @override
+  
+  // Carregar dados do POS, incluindo métodos de pagamento permitidos
+  Future<void> _loadPosData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+      
+      // Obter dados do usuário/POS atual
+      final userData = await POS2PermissionHelper.getUserData();
+      
+      // Verificar se temos informações do POS
+      if (userData['pos'] != null) {
+        final pos = userData['pos'];
+        
+        // Verificar métodos de pagamento disponíveis
+        if (pos['payment_methods'] != null) {
+          Map<String, dynamic> paymentMethods;
+          
+          // Pode estar como String JSON ou já como Map
+          if (pos['payment_methods'] is String) {
+            paymentMethods = jsonDecode(pos['payment_methods']);
+          } else {
+            paymentMethods = pos['payment_methods'];
+          }
+          
+          // Filtrar apenas os métodos habilitados (valor 1 ou true)
+          final availableMethods = <String>[];
+          paymentMethods.forEach((key, value) {
+            if (value == 1 || value == '1' || value == true) {
+              availableMethods.add(key.toLowerCase());
+            }
+          });
+          
+          // Se não houver métodos disponíveis, usar card como padrão
+          if (availableMethods.isEmpty) {
+            availableMethods.add('card');
+          }
+          
+          // Atualizar estado
+          setState(() {
+            _availablePaymentMethods = availableMethods;
+            _selectedPaymentMethod = availableMethods.first;
+          });
+          
+          POS2DebugHelper.log('Métodos de pagamento disponíveis: $_availablePaymentMethods');
+        }
+      }
+      
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao carregar dados do POS', error: e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }  @override
   void dispose() {
     _customerNameController.dispose();
     _customerEmailController.dispose();
     _customerPhoneController.dispose();
+    _customerVatNumberController.dispose();
+    _paidAmountController.dispose();
     _notesController.dispose();
     super.dispose();
   }
 
-  // Carregar métodos de pagamento da API
-  Future<void> _loadPaymentMethods() async {
-    try {
-      setState(() => _isLoading = true);
-      final response = await POS2ApiService.getPaymentMethods();
-      
-      if (response['success'] && response['data'] is List) {
-        setState(() {
-          _paymentMethods = List<Map<String, String>>.from(
-            (response['data'] as List).map((method) => {
-              'value': method['value']?.toString() ?? '',
-              'label': method['label']?.toString() ?? '',
-            })
-          );
-        });
-        
-        if (_paymentMethods.isNotEmpty) {
-          setState(() => _selectedPaymentMethod = _paymentMethods.first['value'] ?? 'Cash');
-        }
-      }
-    } catch (e) {
-      POS2DebugHelper.logError('Erro ao carregar métodos de pagamento', error: e);
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  // Processar checkout
-  Future<void> _handleCheckout() async {
-    if (_cartService.items.isEmpty) {
-      _showMessage('O carrinho está vazio', isError: true);
+  // Método para processar o checkout
+  Future<void> _processCheckout() async {
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isProcessing = true;
+      _errorMessage = null;
+    });
 
     try {
       final result = await _cartService.checkout(
         paymentMethod: _selectedPaymentMethod,
-        customerName: _customerNameController.text.isEmpty ? null : _customerNameController.text,
-        customerEmail: _customerEmailController.text.isEmpty ? null : _customerEmailController.text,
-        customerPhone: _customerPhoneController.text.isEmpty ? null : _customerPhoneController.text,
-        notes: _notesController.text.isEmpty ? null : _notesController.text,
+        customerName: _customerNameController.text.trim(),
+        customerEmail: _customerEmailController.text.trim(),
+        customerPhone: _customerPhoneController.text.trim(),
+        notes: _notesController.text.trim(),
+        sendSms: _sendToPhone,
+        sendEmail: _sendToMail,
+        printInvoice: _printInvoice,
+        sendInvoiceEmail: _sendInvoiceEmail,
+        withdraw: _withdraw,
+        physicalQr: _physicalQr,
       );
 
+      if (!mounted) return;
+
       if (result['success']) {
-        _showMessage('Compra finalizada com sucesso!');
-        
-        // Exibir dados do pedido
-        if (mounted) {
-          _showOrderSuccessDialog(result);
-        }
+        // Mostrar diálogo de sucesso
+        _showSuccessDialog(result);
       } else {
-        _showMessage(result['message'] ?? 'Erro ao finalizar compra', isError: true);
+        // Mostrar mensagem de erro
+        setState(() {
+          _errorMessage = result['message'] ?? 'Ocorreu um erro durante o processamento do pagamento.';
+          _isProcessing = false;
+        });
       }
     } catch (e) {
-      _showMessage('Erro ao processar pagamento: $e', isError: true);
-    } finally {
-      setState(() => _isLoading = false);
+      POS2DebugHelper.logError('Erro ao processar checkout', error: e);
+      setState(() {
+        _errorMessage = 'Ocorreu um erro inesperado: $e';
+        _isProcessing = false;
+      });
     }
   }
 
-  // Mostrar diálogo com informações do pedido bem-sucedido
-  void _showOrderSuccessDialog(Map<String, dynamic> orderData) {
+  // Diálogo de sucesso
+  void _showSuccessDialog(Map<String, dynamic> result) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Compra Finalizada!'),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 10),
+            Text('Pagamento Concluído'),
+          ],
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Pedido #${orderData['order']?['id'] ?? 'N/A'}'),
-              const SizedBox(height: 8),
-              Text('Total: €${(orderData['order']?['total'] ?? 0.0).toStringAsFixed(2)}'),
+              const Text(
+                'O pagamento foi processado com sucesso!',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 16),
               
-              // Bilhetes
-              if (orderData['tickets'] != null && orderData['tickets'] is List && (orderData['tickets'] as List).isNotEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Bilhetes:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    ...List.from((orderData['tickets'] as List).map((ticket) => 
-                      Text('${ticket['name'] ?? 'Bilhete'} - ${ticket['code'] ?? 'N/A'}')
-                    )),
-                  ],
-                ),
-                
-              const SizedBox(height: 16),
+              // Detalhes do pedido
+              if (result['order'] != null) ...[
+                const Text('Detalhes do Pedido:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text('Número: #${result['order']['reference_number'] ?? 'N/A'}'),
+                Text('Total: €${result['order']['total']?.toStringAsFixed(2) ?? '0.00'}'),
+                const SizedBox(height: 16),
+              ],
               
-              // Link para a fatura
-              if (orderData['invoice_url'] != null)
-                InkWell(
-                  onTap: () {
-                    // Abrir URL da fatura
+              // Ações disponíveis
+              if (result['invoice_url'] != null || (result['tickets'] != null && (result['tickets'] as List).isNotEmpty)) ...[
+                const Text('Ações disponíveis:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+              ],
+              
+              // Botão para fatura se disponível
+              if (result['invoice_url'] != null)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    // TODO: Implementar abertura da fatura
+                    Navigator.of(context).pop(); // Fecha o diálogo
                   },
-                  child: Text(
-                    'Ver Fatura',
-                    style: TextStyle(
-                      color: Theme.of(context).primaryColor,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
+                  icon: const Icon(Icons.receipt),
+                  label: const Text('Ver Fatura'),
+                ),
+              
+              // Botão para imprimir tickets se disponível
+              if (result['tickets'] != null && (result['tickets'] as List).isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    // TODO: Implementar impressão de tickets
+                    Navigator.of(context).pop(); // Fecha o diálogo
+                  },
+                  icon: const Icon(Icons.print),
+                  label: const Text('Imprimir Tickets'),
                 ),
             ],
           ),
@@ -161,256 +237,220 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
         actions: [
           TextButton(
             onPressed: () {
-              // Voltar à tela anterior e depois à tela inicial
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // Fecha o diálogo
+              // Retorna à tela anterior
               Navigator.of(context).pop();
             },
-            child: const Text('FECHAR'),
+            child: const Text('CONCLUIR'),
           ),
         ],
       ),
     );
   }
 
-  // Exibir mensagem na snackbar
-  void _showMessage(String message, {bool isError = false}) {
-    if (!mounted) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-      ),
-    );
+  double _calculateReturnAmount() {
+    return _selectedPaymentMethod == 'cash' && _paidAmount > _cartService.totalPrice 
+      ? _paidAmount - _cartService.totalPrice 
+      : 0;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Checkout'),
+    return POS2LoadingOverlay(
+      isLoading: _isProcessing,
+      message: 'Processando pagamento...',
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Finalizar Compra'),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: _isLoading 
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Carregando métodos de pagamento...'),
+                ],
+              ),
+            )
+          : _buildCheckoutForm(),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _cartService.items.isEmpty
-              ? _buildEmptyCart()
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Resumo dos itens
-                      _buildOrderSummary(),
-                      
-                      // Informações do cliente
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Informações do Cliente',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Campos do cliente
-                      TextField(
-                        controller: _customerNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nome (opcional)',
-                          prefixIcon: Icon(Icons.person),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      
-                      TextField(
-                        controller: _customerEmailController,
-                        decoration: const InputDecoration(
-                          labelText: 'E-mail (opcional)',
-                          prefixIcon: Icon(Icons.email),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      
-                      TextField(
-                        controller: _customerPhoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'Telefone (opcional)',
-                          prefixIcon: Icon(Icons.phone),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Observações
-                      TextField(
-                        controller: _notesController,
-                        decoration: const InputDecoration(
-                          labelText: 'Observações (opcional)',
-                          prefixIcon: Icon(Icons.note),
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 24),
-                      
-                      // Método de pagamento
-                      const Text(
-                        'Método de Pagamento',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedPaymentMethod,
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.payment),
-                          border: OutlineInputBorder(),
-                        ),
-                        items: _paymentMethods.map((method) {
-                          return DropdownMenuItem<String>(
-                            value: method['value'],
-                            child: Text(method['label'] ?? ''),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() => _selectedPaymentMethod = value ?? 'Cash');
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-      bottomNavigationBar: _cartService.items.isEmpty ? null : _buildCheckoutBar(),
     );
   }
 
-  // Widget para carrinho vazio
-  Widget _buildEmptyCart() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  // Formulário principal de checkout
+  Widget _buildCheckoutForm() {
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          const Icon(Icons.shopping_cart, size: 80, color: Colors.grey),
-          const SizedBox(height: 16),
-          const Text(
-            'O carrinho está vazio',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
+          // Resumo do pedido
+          _buildOrderSummary(),
+          const SizedBox(height: 20),
+          
+          // Seção Cliente
+          _buildCustomerSection(),
+          const SizedBox(height: 20),
+          
+          // Seção Pagamento
+          _buildPaymentSection(),
+          const SizedBox(height: 20),
+          
+          // Opções adicionais
+          _buildOptionsSection(),
+          const SizedBox(height: 20),
+          
+          // Mensagem de erro (se houver)
+          if (_errorMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: TextStyle(color: Colors.red.shade800),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Adicione itens ao carrinho para continuar',
-            style: TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 20),
+          ],
+          
+          // Botão de finalizar compra
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('VOLTAR'),
+            onPressed: _isProcessing ? null : _processCheckout,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'CONFIRMAR PAGAMENTO',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // Resumo dos itens do pedido
+  // Resumo do pedido
   Widget _buildOrderSummary() {
     return Card(
-      margin: EdgeInsets.zero,
+      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Resumo do Pedido',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            const Row(
+              children: [
+                Icon(Icons.shopping_cart),
+                SizedBox(width: 8),
+                Text(
+                  'Resumo do Carrinho',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
+            const Divider(height: 24),
             
-            // Lista resumida de itens
-            ...List.generate(_cartService.items.length, (index) {
-              final item = _cartService.items[index];
+            // Lista de itens
+            ..._cartService.items.map((item) {
               final itemData = item['item'];
               final price = item['price'] as double? ?? 0.0;
               final quantity = item['quantity'] as int? ?? 1;
-              final itemTotal = (price * quantity);
+              final itemTotal = price * quantity;
               
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                padding: const EdgeInsets.only(bottom: 12),
                 child: Row(
                   children: [
-                    Expanded(
-                      flex: 5,
-                      child: Text(
-                        '${itemData['name'] ?? 'Item'}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        '$quantity x €${price.toStringAsFixed(2)}',
-                        textAlign: TextAlign.right,
-                      ),
+                    // Ícone baseado no tipo de item
+                    Icon(
+                      itemData['type'] == 'ticket'
+                          ? Icons.confirmation_number
+                          : itemData['type'] == 'extra'
+                              ? Icons.fastfood
+                              : Icons.shopping_bag,
+                      color: itemData['type'] == 'ticket'
+                          ? Colors.blue
+                          : itemData['type'] == 'extra'
+                              ? Colors.amber
+                              : Colors.grey,
+                      size: 20,
                     ),
                     const SizedBox(width: 8),
+                    
+                    // Nome e detalhes
                     Expanded(
-                      flex: 2,
-                      child: Text(
-                        '€${itemTotal.toStringAsFixed(2)}',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            itemData['name'] ?? 'Item',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          if (quantity > 1)
+                            Text(
+                              '€${price.toStringAsFixed(2)} x $quantity',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
                       ),
+                    ),
+                    
+                    // Preço total
+                    Text(
+                      '€${itemTotal.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               );
             }),
             
-            const Divider(height: 24),
+            const Divider(),
             
             // Total
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Total',
+                  'Total:',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 Text(
                   '€${_cartService.totalPrice.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 16,
+                  style: TextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: Theme.of(context).primaryColor,
                   ),
                 ),
               ],
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Voltar para o carrinho
-            Center(
-              child: TextButton.icon(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Voltar para o carrinho'),
-              ),
             ),
           ],
         ),
@@ -418,56 +458,328 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
     );
   }
 
-  // Barra de checkout
-  Widget _buildCheckoutBar() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Total: ${_cartService.totalItems} ${_cartService.totalItems == 1 ? 'item' : 'itens'}',
-                style: const TextStyle(fontSize: 12),
-              ),
-              Text(
-                '€${_cartService.totalPrice.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+  // Seção de informações do cliente
+  Widget _buildCustomerSection() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.person),
+                SizedBox(width: 8),
+                Text(
+                  'Cliente',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Nome do cliente (obrigatório)
+            TextFormField(
+              controller: _customerNameController,
+              decoration: const InputDecoration(
+                labelText: 'Nome *',
+                prefixIcon: Icon(Icons.person_outline),
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Nome é obrigatório';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            
+            // Email (opcional)
+            TextFormField(
+              controller: _customerEmailController,
+              decoration: const InputDecoration(
+                labelText: 'Email (opcional)',
+                prefixIcon: Icon(Icons.email_outlined),
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) {
+                if (value != null && value.isNotEmpty) {
+                  // Validação básica de email
+                  final emailPattern = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                  if (!emailPattern.hasMatch(value)) {
+                    return 'Por favor, insira um email válido';
+                  }
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            
+            // Telefone (opcional)
+            TextFormField(
+              controller: _customerPhoneController,
+              decoration: const InputDecoration(
+                labelText: 'Telefone (opcional)',
+                prefixIcon: Icon(Icons.phone_outlined),
+                border: OutlineInputBorder(),
+                hintText: '+351...',
+              ),
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 12),
+            
+            // NIF (opcional)
+            TextFormField(
+              controller: _customerVatNumberController,
+              decoration: const InputDecoration(
+                labelText: 'NIF (opcional)',
+                prefixIcon: Icon(Icons.badge_outlined),
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Seção de métodos de pagamento
+  Widget _buildPaymentSection() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.payment),
+                SizedBox(width: 8),
+                Text(
+                  'Pagamento',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Método de pagamento
+            const Text('Método de Pagamento:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            
+            // Opções de métodos de pagamento
+            if (_availablePaymentMethods.contains('card'))
+              _buildPaymentMethod('card', 'Cartão de Crédito/Débito', Icons.credit_card),
+            if (_availablePaymentMethods.contains('cash'))
+              _buildPaymentMethod('cash', 'Dinheiro', Icons.attach_money),
+            if (_availablePaymentMethods.contains('transfer'))
+              _buildPaymentMethod('transfer', 'Transferência', Icons.account_balance),
+            if (_availablePaymentMethods.contains('mbway'))
+              _buildPaymentMethod('mbway', 'MB WAY', Icons.phone_android),
+            
+            // Campo de valor pago (para pagamento em dinheiro)
+            if (_selectedPaymentMethod == 'cash') ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _paidAmountController,
+                      decoration: const InputDecoration(
+                        labelText: 'Valor Pago (€)',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (value) {
+                        setState(() {
+                          _paidAmount = double.tryParse(value) ?? 0.0;
+                        });
+                      },
+                      validator: (value) {
+                        if (_selectedPaymentMethod == 'cash') {
+                          final amount = double.tryParse(value ?? '0') ?? 0;
+                          if (amount < _cartService.totalPrice) {
+                            return 'Valor deve ser maior ou igual ao total';
+                          }
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: _calculateReturnAmount() > 0 ? Colors.green.shade50 : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: _calculateReturnAmount() > 0 ? Colors.green.shade300 : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Troco:'),
+                          const SizedBox(height: 4),
+                          Text(
+                            '€${_calculateReturnAmount().toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: _calculateReturnAmount() > 0 ? Colors.green.shade700 : Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Método de pagamento individual
+  Widget _buildPaymentMethod(String value, String label, IconData icon) {
+    final isSelected = _selectedPaymentMethod == value;
+    return InkWell(
+      onTap: () => setState(() => _selectedPaymentMethod = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue.shade50 : Colors.white,
+          border: Border.all(
+            color: isSelected ? Colors.blue : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
           ),
-          ElevatedButton(
-            onPressed: _isLoading ? null : _handleCheckout,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon, 
+              color: isSelected ? Colors.blue : Colors.grey.shade600,
+              size: 28,
             ),
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
-                    ),
-                  )
-                : const Text('FINALIZAR COMPRA'),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? Colors.blue.shade700 : Colors.black,
+                ),
+              ),
+            ),
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: isSelected ? Colors.blue : Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Seção de opções adicionais
+  Widget _buildOptionsSection() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.settings),
+                SizedBox(width: 8),
+                Text(
+                  'Opções',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Opções em grid de 2x3
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildOptionSwitch(
+                        'Enviar Email', 
+                        _sendToMail, 
+                        (value) => setState(() => _sendToMail = value),
+                      ),
+                      _buildOptionSwitch(
+                        'Enviar SMS', 
+                        _sendToPhone, 
+                        (value) => setState(() => _sendToPhone = value),
+                      ),
+                      _buildOptionSwitch(
+                        'Fatura Email', 
+                        _sendInvoiceEmail, 
+                        (value) => setState(() => _sendInvoiceEmail = value),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildOptionSwitch(
+                        'Imprimir Fatura', 
+                        _printInvoice, 
+                        (value) => setState(() => _printInvoice = value),
+                      ),
+                      _buildOptionSwitch(
+                        'Levantar', 
+                        _withdraw, 
+                        (value) => setState(() => _withdraw = value),
+                      ),
+                      _buildOptionSwitch(
+                        'QR Físico', 
+                        _physicalQr, 
+                        (value) => setState(() => _physicalQr = value),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Switch para opções
+  Widget _buildOptionSwitch(String label, bool value, Function(bool) onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: Theme.of(context).primaryColor.withAlpha(128),
+            activeThumbColor: Theme.of(context).primaryColor,
           ),
+          Text(label),
         ],
       ),
     );

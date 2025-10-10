@@ -1,6 +1,15 @@
+import 'dart:convert';
 import 'package:essenciacompany_mobile/core/cart_service.dart';
 import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
+
+/// Extensão para capitalizar a primeira letra de uma string
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return this[0].toUpperCase() + substring(1);
+  }
+}
 
 /// Serviço de carrinho específico para o POS2
 /// Utiliza o CartService existente como base
@@ -134,6 +143,12 @@ class POS2CartService {
     String? customerEmail,
     String? customerPhone,
     String? notes,
+    bool sendSms = false,
+    bool sendEmail = false,
+    bool printInvoice = false,
+    bool physicalQr = false,
+    bool withdraw = false,
+    bool sendInvoiceEmail = false,
   }) async {
     try {
       if (_cartService.items.isEmpty) {
@@ -143,27 +158,73 @@ class POS2CartService {
         };
       }
 
-      // Preparar dados para checkout
+      // Preparar dados para checkout exatamente como na versão web
       final checkoutData = {
-        'payment_method': paymentMethod,
         'items': _cartService.items.map((item) {
-          return {
+          // Transformar item para o formato esperado pela API (exatamente como na versão web)
+          final itemData = item['item'];
+          final Map<String, dynamic> mappedItem = {
             'id': item['id'],
-            'type': item['item']['type'],
+            'name': itemData['name'] ?? 'Produto',
+            'type': itemData['type'],
             'quantity': item['quantity'],
             'price': item['price'],
-            'metadata': item['item']['metadata'] ?? {},
+            // Incluir produto completo como na versão web
+            'product': {
+              'id': itemData['type'] == 'ticket' ? itemData['ticket_id'] : itemData['extra_id'],
+              'name': itemData['name'] ?? 'Produto',
+              'price': item['price'],
+              'type': itemData['type'],
+            },
+            // Metadados importantes para rastreabilidade
+            'metadata': {
+              ...(itemData['metadata'] ?? {}),
+              'eventId': itemData['event_id'], // Importante para o backend vincular o pedido ao evento
+            },
           };
+
+          // Adicionar ticket_id se presente (importante para extras)
+          if (itemData['ticket_id'] != null) {
+            mappedItem['ticket_id'] = itemData['ticket_id'];
+          }
+
+          // Verificar e adicionar extras se existirem
+          if (itemData['extras'] != null && itemData['extras'] is List && (itemData['extras'] as List).isNotEmpty) {
+            mappedItem['extras'] = itemData['extras'];
+          }
+
+          return mappedItem;
         }).toList(),
-        'total': _cartService.totalPrice,
-        'customer': {
-          'name': customerName,
-          'email': customerEmail,
-          'phone': customerPhone,
+        'totals': {
+          'subtotal': _cartService.totalPrice,
+          'total': _cartService.totalPrice,
+          'final_total': _cartService.totalPrice,
+          'itemsSubtotal': _cartService.totalPrice,
+          'extrasTotal': 0.0, // Caso não tenha extras separados
+          'discounts': 0.0, // Sem descontos no POS2
         },
-        'notes': notes,
+        'billing': {
+          'name': customerName ?? '',
+          'email': customerEmail ?? '',
+          'phone': customerPhone ?? '',
+          'vatNumber': '',
+          'address': '',
+        },
+        'payment': {
+          'method': paymentMethod.capitalize(),
+        },
+        'options': {
+          'sendToMail': sendEmail,
+          'sendToPhone': sendSms,
+          'withdraw': withdraw,
+          'physicalQr': physicalQr,
+          'printInvoice': printInvoice,
+          'sendInvoiceToMail': sendInvoiceEmail,
+        },
       };
 
+      POS2DebugHelper.log('POS2: Checkout data: ${jsonEncode(checkoutData)}');
+      
       // Chamar a API de checkout
       final result = await POS2ApiService.checkout(checkoutData);
       
