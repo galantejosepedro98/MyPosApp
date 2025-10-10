@@ -206,7 +206,7 @@ class POS2CartService {
         'billing': {
           'name': customerName ?? '',
           'email': customerEmail ?? '',
-          'phone': customerPhone ?? '',
+          'phone': customerPhone ?? '', // Enviar o número como está (o indicativo será adicionado pelo backend)
           'vatNumber': '',
           'address': '',
         },

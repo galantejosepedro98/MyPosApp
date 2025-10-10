@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl_phone_number_input/intl_phone_number_input.dart';
+import 'package:my_pos/my_pos.dart';
+import 'package:my_pos/enums/my_pos_currency_enum.dart';
+import 'package:my_pos/enums/py_pos_payment_response.dart';
 import '../services/pos2_cart_service.dart';
 import '../services/pos2_debug_helper.dart';
 import '../services/pos2_permission_helper.dart';
 import '../widgets/pos2_loading_overlay.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 /// Tela de checkout para o sistema POS2
 /// Implementada de acordo com o design do website
@@ -166,6 +170,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
     }
 
     // Validações adicionais específicas para os campos condicionais
+    // Verificar se o telefone está preenchido quando SMS estiver ativado
     if (_sendToPhone && _customerPhoneController.text.trim().isEmpty) {
       setState(() {
         _errorMessage = 'Telefone é obrigatório para entrega por SMS.';
@@ -186,7 +191,77 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
     });
 
     try {
-      // O número de telefone já inclui o código do país graças ao InternationalPhoneNumberInput
+      // Se o método de pagamento for cartão, primeiro processa pelo terminal MyPOS
+      if (_selectedPaymentMethod == 'card') {
+        try {
+          // Mostrar mensagem que estamos processando pagamento
+          Fluttertoast.showToast(
+            msg: 'Processando pagamento com cartão...',
+            gravity: ToastGravity.CENTER,
+            backgroundColor: const Color(0xFF28BADF),
+            textColor: Colors.white,
+            fontSize: 16.0
+          );
+          
+          // Obter valor total do carrinho
+          final totalPrice = _cartService.totalPrice;
+          
+          // Processar pagamento com MyPOS
+          final paymentResponse = await MyPos.makePayment(
+            amount: totalPrice,
+            currency: MyPosCurrency.eur,
+            reference: DateTime.now().millisecondsSinceEpoch.toString(),
+          );
+          
+          // Verificar se pagamento foi bem-sucedido
+          if (paymentResponse != PaymentResponse.success) {
+            // Se falhou, exibir erro e cancelar processo de checkout
+            setState(() {
+              _isProcessing = false;
+              _errorMessage = 'Pagamento com cartão cancelado ou recusado.';
+            });
+            
+            Fluttertoast.showToast(
+              msg: 'Pagamento cancelado ou recusado',
+              gravity: ToastGravity.CENTER,
+              backgroundColor: const Color(0xFFF36A30),
+              textColor: Colors.white,
+              fontSize: 16.0
+            );
+            
+            return;
+          }
+          
+          // Se chegou aqui, pagamento foi bem-sucedido - informar ao usuário
+          Fluttertoast.showToast(
+            msg: 'Pagamento com cartão aprovado! Criando pedido...',
+            gravity: ToastGravity.CENTER,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+            fontSize: 16.0
+          );
+        } catch (e) {
+          // Capturar erros do terminal MyPOS
+          POS2DebugHelper.logError('Erro ao processar pagamento com MyPOS', error: e);
+          
+          setState(() {
+            _isProcessing = false;
+            _errorMessage = 'Erro no terminal de pagamento: $e';
+          });
+          
+          Fluttertoast.showToast(
+            msg: 'Erro ao processar pagamento: $e',
+            gravity: ToastGravity.CENTER,
+            backgroundColor: const Color(0xFFF36A30),
+            textColor: Colors.white,
+            fontSize: 16.0
+          );
+          
+          return;
+        }
+      }
+      
+      // O pagamento foi bem-sucedido ou não é cartão, então prosseguir com a criação do pedido
       final result = await _cartService.checkout(
         paymentMethod: _selectedPaymentMethod,
         customerName: _customerNameController.text.trim(),
@@ -590,7 +665,13 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                       onInputChanged: (PhoneNumber number) {
                         setState(() {
                           _countryCode = number.isoCode;
-                          // O código de discagem já é automaticamente incluído no _customerPhoneController
+                          // Manter apenas o número no controller, sem o código do país
+                          if (number.phoneNumber != null && number.phoneNumber!.contains(number.dialCode!)) {
+                            final phoneWithoutCode = number.phoneNumber!.substring(number.dialCode!.length);
+                            if (_customerPhoneController.text != phoneWithoutCode) {
+                              _customerPhoneController.text = phoneWithoutCode;
+                            }
+                          }
                         });
                       },
                       initialValue: PhoneNumber(isoCode: _countryCode),
@@ -604,11 +685,11 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                         hintStyle: TextStyle(color: Colors.grey.shade600),
                         border: const OutlineInputBorder(),
                       ),
-                      spaceBetweenSelectorAndTextField: 0,
-                      selectorTextStyle: const TextStyle(fontSize: 16),
+                      formatInput: false, // Não formatar o número digitado
+                      ignoreBlank: true, // Não validar se estiver em branco
+                      autoValidateMode: AutovalidateMode.disabled, // Desativar validação automática
+                      validator: (_) => null, // Sem validação personalizada
                       keyboardType: TextInputType.phone,
-                      autoValidateMode: AutovalidateMode.disabled,
-                      formatInput: true,
                       hintText: 'Número de telefone',
                     ),
                   ),
