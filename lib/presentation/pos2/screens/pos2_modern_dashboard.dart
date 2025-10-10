@@ -15,8 +15,7 @@ class POS2ModernDashboard extends StatefulWidget {
   State<POS2ModernDashboard> createState() => _POS2ModernDashboardState();
 }
 
-class _POS2ModernDashboardState extends State<POS2ModernDashboard>
-    with TickerProviderStateMixin {
+class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
   
   // Estado da aplicação
   List<POS2Event> _events = [];
@@ -29,20 +28,10 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
   // Quantidades no carrinho (id do produto/extra -> quantidade)
   final Map<int, int> _cartQuantities = {};
   
-  // Controllers para animações
-  late TabController _tabController;
-
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: 0); // Definindo o índice inicial como 0 (Produtos)
     loadInitialData();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> loadInitialData() async {
@@ -186,25 +175,14 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF667eea),
-              Color(0xFF764ba2),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(),
-              if (_selectedEvent == null) _buildEventSelector(),
-              if (_selectedEvent != null) _buildMainContent(),
-            ],
-          ),
+      backgroundColor: const Color(0xFF1A1A1A),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            if (_selectedEvent == null) _buildEventSelector(),
+            if (_selectedEvent != null) _buildMainContent(),
+          ],
         ),
       ),
       bottomNavigationBar: _selectedEvent != null ? _buildPersistentCartBar() : null,
@@ -213,7 +191,17 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2D2D),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           // Removido o ícone de ponto de venda
@@ -231,8 +219,8 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                 ),
                 Text(
                   _selectedEvent?.name ?? 'Selecione um evento',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
+                  style: const TextStyle(
+                    color: Color(0xFFB0B0B0),
                     fontSize: 14,
                   ),
                 ),
@@ -243,15 +231,23 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
           if (_selectedEvent != null) ...[
             // Botão de pesquisa
             IconButton(
-              icon: const Icon(Icons.search, color: Colors.white),
+              icon: const Icon(Icons.search, color: Color(0xFF667eea)),
               onPressed: () => _showSearchDialog(),
               tooltip: 'Pesquisar',
               constraints: const BoxConstraints(),
               padding: const EdgeInsets.all(8),
             ),
+            // Botão do scanner
+            IconButton(
+              icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF667eea)),
+              onPressed: () => _showScannerDialog(),
+              tooltip: 'Scanner',
+              constraints: const BoxConstraints(),
+              padding: const EdgeInsets.all(8),
+            ),
             // Botão de atualizar
             IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.white),
+              icon: const Icon(Icons.refresh, color: Color(0xFF667eea)),
               onPressed: () => _refreshEventData(),
               tooltip: 'Atualizar',
               constraints: const BoxConstraints(),
@@ -259,7 +255,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
             ),
             // Menu de opções (3 pontos)
             IconButton(
-              icon: const Icon(Icons.more_vert, color: Colors.white),
+              icon: const Icon(Icons.more_vert, color: Color(0xFF667eea)),
               onPressed: () => _showOptionsMenu(),
               tooltip: 'Menu',
               constraints: const BoxConstraints(),
@@ -273,37 +269,35 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
 
   Widget _buildEventSelector() {
     if (_loading) {
-      return const Expanded(
-        child: Center(
-          child: CircularProgressIndicator(color: Colors.white),
+      return Expanded(
+        child: Container(
+          color: const Color(0xFF1A1A1A),
+          child: const Center(
+            child: CircularProgressIndicator(color: Color(0xFF667eea)),
+          ),
         ),
       );
     }
 
     return Expanded(
       child: Container(
-        margin: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
+        color: const Color(0xFF1A1A1A),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D2D2D),
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
+                ),
+              ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF667eea).withValues(alpha: 0.1),
+                      color: const Color(0xFF667eea).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
@@ -317,7 +311,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D3748),
+                      color: Colors.white,
                     ),
                   ),
                 ],
@@ -325,24 +319,23 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
             ),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.all(8),
                 itemCount: _events.length,
                 itemBuilder: (context, index) {
                   final event = _events[index];
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.all(4),
                     child: Material(
-                      color: Colors.transparent,
+                      color: const Color(0xFF3A3A3A),
+                      elevation: 2,
+                      borderRadius: BorderRadius.circular(8),
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                         onTap: () => _selectEvent(event),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Reduzido o padding vertical
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            border: Border.all(
-                              color: Colors.grey.withValues(alpha: 0.2),
-                            ),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
                             children: [
@@ -350,7 +343,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                                 width: 40, // Reduzido de 50 para 40
                                 height: 40, // Reduzido de 50 para 40
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF667eea).withValues(alpha: 0.1),
+                                  color: const Color(0xFF667eea).withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Icon(
@@ -369,7 +362,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0xFF2D3748),
+                                        color: Colors.white,
                                       ),
                                     ),
                                     // Descrição do evento removida para simplificar a interface
@@ -379,7 +372,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                               const Icon(
                                 Icons.arrow_forward_ios,
                                 size: 16,
-                                color: Colors.grey,
+                                color: Color(0xFFB0B0B0),
                               ),
                             ],
                           ),
@@ -398,90 +391,25 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
 
   Widget _buildMainContent() {
     if (_loading) {
-      return const Expanded(
-        child: Center(
-          child: CircularProgressIndicator(color: Colors.white),
+      return Expanded(
+        child: Container(
+          color: const Color(0xFF1A1A1A),
+          child: const Center(
+            child: CircularProgressIndicator(color: Color(0xFF667eea)),
+          ),
         ),
       );
     }
 
     return Expanded(
       child: Container(
-        margin: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            _buildTabBar(),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildProductsTab(), // Agora é a primeira aba (padrão)
-                  _buildScannerTab(),
-                ],
-              ),
-            ),
-          ],
-        ),
+        color: const Color(0xFF1A1A1A),
+        child: _buildProductsTab(),
       ),
     );
   }
 
-  Widget _buildTabBar() {
-    return Container(
-      margin: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: const Color(0xFF667eea),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        labelColor: Colors.white,
-        unselectedLabelColor: Colors.grey[600],
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        tabs: const [
-          Tab(
-            icon: Icon(Icons.shopping_basket),
-            text: 'Produtos',
-          ),
-          Tab(
-            icon: Icon(Icons.qr_code_scanner),
-            text: 'Scanner',
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildScannerTab() {
-    return UniversalScanner(
-      selectedEventId: _selectedEvent?.id,
-      onScanResult: (ticketData) {
-        POS2DebugHelper.log('Bilhete escaneado: ${ticketData['product_name'] ?? ticketData['name']}');
-      },
-      onAddToCart: (item) {
-        // Item adicionado ao carrinho - sem notificação
-        String itemName = item['name'] ?? 'Item';
-        // Apenas atualizamos o estado sem mostrar notificação
-        
-        POS2DebugHelper.log('Item do scanner adicionado ao carrinho: $itemName');
-      },
-    );
-  }
 
   Widget _buildProductsTab() {
     // Se não houver bilhetes nem extras, mostre mensagem
@@ -510,7 +438,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D3748),
+                  color: Colors.white,
                 ),
               ),
             ],
@@ -555,7 +483,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D3748),
+                  color: Colors.white,
                 ),
               ),
             ],
@@ -587,7 +515,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
     
     // Retornar a lista completa de produtos
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(8),
       children: productCards,
     );
   }
@@ -604,14 +532,14 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
           Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
+            decoration: const BoxDecoration(
+              color: Color(0xFF3A3A3A),
               shape: BoxShape.circle,
             ),
             child: Icon(
               icon,
               size: 40,
-              color: Colors.grey[400],
+              color: const Color(0xFF707070),
             ),
           ),
           const SizedBox(height: 16),
@@ -644,7 +572,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
     required IconData icon,
     required Color color,
     required String type,
-    EdgeInsets margin = const EdgeInsets.only(bottom: 12),
+    EdgeInsets margin = const EdgeInsets.only(bottom: 8),
   }) {
     final quantity = _cartQuantities[id] ?? 0;
     final isAvailable = stock > 0 || stock == 999; // 999 = ilimitado (extras)
@@ -652,30 +580,24 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
     return Container(
       margin: margin,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: const Color(0xFF2D2D2D),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Row(
           children: [
             Container(
-              width: 50,
-              height: 50,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(icon, color: color),
+              child: Icon(icon, color: color, size: 20),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -685,15 +607,15 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF2D3748),
+                      color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     stock == 999 ? 'Stock: Ilimitado' : 'Stock: $stock',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
+                      color: Color(0xFFB0B0B0),
                     ),
                   ),
                 ],
@@ -851,10 +773,10 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF2D2D2D),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -904,7 +826,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                   '$totalItems ${totalItems == 1 ? 'item' : 'itens'}',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.grey,
+                    color: Color(0xFFB0B0B0),
                   ),
                 ),
                 Text(
@@ -912,6 +834,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
               ],
@@ -976,6 +899,80 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard>
             child: const Text('FECHAR'),
           ),
         ],
+      ),
+    );
+  }
+
+  // Método para mostrar o diálogo do scanner
+  void _showScannerDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF667eea),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.qr_code_scanner, color: Colors.white),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Scanner QR/Código de Barras',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: UniversalScanner(
+                  selectedEventId: _selectedEvent?.id,
+                  onScanResult: (ticketData) {
+                    POS2DebugHelper.log('Bilhete escaneado: ${ticketData['product_name'] ?? ticketData['name']}');
+                  },
+                  onAddToCart: (item) {
+                    String itemName = item['name'] ?? 'Item';
+                    POS2DebugHelper.log('Item do scanner adicionado ao carrinho: $itemName');
+                    // Sincronizar com a UI após adicionar item
+                    _syncCartWithUI();
+                    // Fechar o diálogo do scanner
+                    Navigator.pop(context);
+                    // Mostrar feedback
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('$itemName adicionado ao carrinho'),
+                        backgroundColor: Colors.green,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

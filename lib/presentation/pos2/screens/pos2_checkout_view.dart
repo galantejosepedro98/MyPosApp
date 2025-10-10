@@ -35,8 +35,9 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
   // Controle do passo atual (1 ou 2)
   int _currentStep = 1;
   
-  // Variável para o telefone internacional
+  // Variáveis para o telefone internacional
   String? _countryCode = 'PT'; // Portugal como padrão
+  String? _dialCode = '+351'; // Código de discagem do Portugal como padrão
   
   // Controladores para campos de texto
   final _customerNameController = TextEditingController();
@@ -262,11 +263,17 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
       }
       
       // O pagamento foi bem-sucedido ou não é cartão, então prosseguir com a criação do pedido
+      // Construir o número de telefone completo com código do país
+      String? fullPhoneNumber;
+      if (_customerPhoneController.text.trim().isNotEmpty && _dialCode != null) {
+        fullPhoneNumber = '$_dialCode${_customerPhoneController.text.trim()}';
+      }
+      
       final result = await _cartService.checkout(
         paymentMethod: _selectedPaymentMethod,
         customerName: _customerNameController.text.trim(),
         customerEmail: _customerEmailController.text.trim(),
-        customerPhone: _customerPhoneController.text.trim(),
+        customerPhone: fullPhoneNumber ?? _customerPhoneController.text.trim(),
         notes: _notesController.text.trim(),
         sendSms: _sendToPhone,
         sendEmail: _sendToMail,
@@ -665,6 +672,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                       onInputChanged: (PhoneNumber number) {
                         setState(() {
                           _countryCode = number.isoCode;
+                          _dialCode = number.dialCode; // Armazenar o código de discagem
                           // Manter apenas o número no controller, sem o código do país
                           if (number.phoneNumber != null && number.phoneNumber!.contains(number.dialCode!)) {
                             final phoneWithoutCode = number.phoneNumber!.substring(number.dialCode!.length);

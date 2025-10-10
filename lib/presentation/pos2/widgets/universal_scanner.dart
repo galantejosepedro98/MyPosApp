@@ -350,16 +350,18 @@ class _UniversalScannerState extends State<UniversalScanner> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Campo de entrada do scanner
-          _buildScannerInput(),
-          
-          // Resultado do scan
-          if (_scannedTicket != null)
-            _buildScanResult(status),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Campo de entrada do scanner
+            _buildScannerInput(),
+            
+            // Resultado do scan
+            if (_scannedTicket != null)
+              _buildScanResult(status),
+          ],
+        ),
       ),
     );
   }
@@ -784,129 +786,30 @@ class _UniversalScannerState extends State<UniversalScanner> {
   /// Constrói a seção de extras disponíveis para adicionar
   Widget _buildAvailableExtras() {
     return Container(
-      margin: const EdgeInsets.only(top: 16.0),
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8.0),
-        border: Border.all(color: Colors.grey.shade300),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha((0.05 * 255).round()),
-            blurRadius: 5.0,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      margin: const EdgeInsets.only(top: 12.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Extras Disponíveis:',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14.0,
-            ),
-          ),
-          
-          const Padding(
-            padding: EdgeInsets.only(top: 8.0, bottom: 16.0),
-            child: Row(
-                      children: [
-                Icon(Icons.info_outline, size: 14.0, color: Colors.grey),
-                SizedBox(width: 4.0),
-                Expanded(
-                  child: Text(
-                    'Os extras serão adicionados ao bilhete apenas após o pagamento no checkout.',
-                    style: TextStyle(
-                      fontSize: 12.0,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Mensagem quando não há extras disponíveis
-          if (_availableExtras.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16.0),
-                child: Column(
-                  children: [
-                    Icon(Icons.info_outline, size: 24.0, color: Colors.grey),
-                    SizedBox(height: 8.0),
-                    Text(
-                      'Não há extras disponíveis para este evento.',
-                      style: TextStyle(color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+        children: _availableExtras.map((extra) {
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8.0),
+            child: ElevatedButton(
+              onPressed: () => _handleAddExtraToCart(extra),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
                 ),
               ),
-            ),
-          
-          // Grid de extras disponíveis
-          if (_availableExtras.isNotEmpty)
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 3.0,
-                crossAxisSpacing: 8.0,
-                mainAxisSpacing: 8.0,
+              child: Text(
+                '${extra['name'] ?? 'Extra'} - €${(extra['price'] ?? 0.0).toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 14.0, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center,
               ),
-              itemCount: _availableExtras.length,
-              itemBuilder: (context, index) {
-                final extra = _availableExtras[index];
-                
-                return Card(
-                  elevation: 1.0,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          extra['name'] ?? 'Extra',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12.0,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          '€${(extra['price'] ?? 0.0).toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: 11.0,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(height: 4.0),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () => _handleAddExtraToCart(extra),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 0.0),
-                              visualDensity: VisualDensity.compact,
-                              textStyle: const TextStyle(fontSize: 10.0),
-                            ),
-                            child: const Text('Adicionar ao Carrinho'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
             ),
-        ],
+          );
+        }).toList(),
       ),
     );
   }
