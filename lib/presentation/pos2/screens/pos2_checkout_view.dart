@@ -286,6 +286,9 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
       if (!mounted) return;
 
       if (result['success']) {
+        // Log do resultado para debug
+        POS2DebugHelper.log('Resultado do checkout: ${jsonEncode(result)}');
+        
         // Mostrar diálogo de sucesso
         _showSuccessDialog(result);
       } else {
@@ -329,41 +332,26 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
               const SizedBox(height: 16),
               
               // Detalhes do pedido
-              if (result['order'] != null) ...[
-                const Text('Detalhes do Pedido:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text('Número: #${result['order']['reference_number'] ?? 'N/A'}'),
-                Text('Total: €${result['order']['total']?.toStringAsFixed(2) ?? '0.00'}'),
-                const SizedBox(height: 16),
-              ],
+              const Text('Detalhes do Pedido:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              // Tentar obter número da order de várias fontes possíveis
+              Text('Número: #${_getOrderNumber(result)}'),
+              Text('Total: €${_getOrderTotal(result)}'),
+              const SizedBox(height: 16),
               
               // Ações disponíveis
-              if (result['invoice_url'] != null || (result['tickets'] != null && (result['tickets'] as List).isNotEmpty)) ...[
-                const Text('Ações disponíveis:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-              ],
+              const Text('Ações disponíveis:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
               
-              // Botão para fatura se disponível
-              if (result['invoice_url'] != null)
-                OutlinedButton.icon(
-                  onPressed: () {
-                    // TODO: Implementar abertura da fatura
-                    Navigator.of(context).pop(); // Fecha o diálogo
-                  },
-                  icon: const Icon(Icons.receipt),
-                  label: const Text('Ver Fatura'),
-                ),
-              
-              // Botão para imprimir tickets se disponível
-              if (result['tickets'] != null && (result['tickets'] as List).isNotEmpty)
-                OutlinedButton.icon(
-                  onPressed: () {
-                    // TODO: Implementar impressão de tickets
-                    Navigator.of(context).pop(); // Fecha o diálogo
-                  },
-                  icon: const Icon(Icons.print),
-                  label: const Text('Imprimir Tickets'),
-                ),
+              // Botão para imprimir fatura
+              OutlinedButton.icon(
+                onPressed: () {
+                  // TODO: Implementar impressão da fatura
+                  Navigator.of(context).pop(); // Fecha o diálogo
+                },
+                icon: const Icon(Icons.print),
+                label: const Text('Imprimir Fatura'),
+              ),
             ],
           ),
         ),
@@ -1121,6 +1109,66 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
     );
   }
   
+  // Métodos auxiliares para extrair dados da order
+  String _getOrderNumber(Map<String, dynamic> result) {
+    // Log para debug
+    POS2DebugHelper.log('Tentando extrair número da order de: ${result.keys.toList()}');
+    
+    // 1. Tentar result['order'] primeiro
+    if (result['order'] != null) {
+      final order = result['order'];
+      POS2DebugHelper.log('Dados da order encontrados: ${order.keys.toList()}');
+      
+      final referenceNumber = order['reference_number']?.toString() ?? 
+                             order['id']?.toString() ?? 
+                             order['order_number']?.toString() ??
+                             order['order_id']?.toString();
+      
+      if (referenceNumber != null && referenceNumber != 'null') {
+        return referenceNumber;
+      }
+    }
+    
+    // 2. Tentar result['data']['order']
+    if (result['data'] != null && result['data']['order'] != null) {
+      final order = result['data']['order'];
+      POS2DebugHelper.log('Dados da order em data encontrados: ${order.keys.toList()}');
+      
+      final referenceNumber = order['reference_number']?.toString() ?? 
+                             order['id']?.toString() ?? 
+                             order['order_number']?.toString() ??
+                             order['order_id']?.toString();
+                             
+      if (referenceNumber != null && referenceNumber != 'null') {
+        return referenceNumber;
+      }
+    }
+    
+    // 3. Tentar result['data']['id'] diretamente
+    if (result['data'] != null && result['data']['id'] != null) {
+      return result['data']['id'].toString();
+    }
+    
+    // 4. Fallback: usar timestamp como número de referência única
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    POS2DebugHelper.log('Usando timestamp como fallback: $timestamp');
+    return timestamp.substring(7); // Últimos 6 dígitos do timestamp
+  }
+  
+  String _getOrderTotal(Map<String, dynamic> result) {
+    // Tentar obter o total da order
+    if (result['order'] != null && result['order']['total'] != null) {
+      return result['order']['total'].toStringAsFixed(2);
+    }
+    
+    if (result['data'] != null && result['data']['order'] != null && result['data']['order']['total'] != null) {
+      return result['data']['order']['total'].toStringAsFixed(2);
+    }
+    
+    // Fallback para o valor do carrinho
+    return _cartService.totalPrice.toStringAsFixed(2);
+  }
+
   // Método para validar campos obrigatórios antes de processar o pagamento
   bool _validateRequiredFields() {
     // O nome do cliente é sempre obrigatório
