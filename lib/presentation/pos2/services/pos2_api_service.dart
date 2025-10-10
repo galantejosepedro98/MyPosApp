@@ -470,4 +470,6 @@ class POS2ApiService {
       };
     }
   }
+  
+
 }

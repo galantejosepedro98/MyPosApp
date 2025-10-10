@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
-import '../models/pos2_product.dart';
+import 'package:flutter/services.dart';
 
+/// UniversalScanner - Scanner universal para códigos QR e bilhetes
+/// Replica o comportamento do componente web para o Flutter
+/// Permite validar bilhetes, gerenciar extras e adicionar itens ao carrinho
 class UniversalScanner extends StatefulWidget {
+  /// Callback quando um código é escaneado com sucesso
   final Function(Map<String, dynamic>)? onScanResult;
+  
+  /// Callback para adicionar um item ao carrinho
   final Function(Map<String, dynamic>)? onAddToCart;
+  
+  /// ID do evento selecionado (opcional)
   final int? selectedEventId;
 
   const UniversalScanner({
@@ -20,15 +28,27 @@ class UniversalScanner extends StatefulWidget {
 }
 
 class _UniversalScannerState extends State<UniversalScanner> {
+  // Controladores e estados
   final TextEditingController _scanController = TextEditingController();
+  final FocusNode _scanFocusNode = FocusNode();
   bool _isProcessing = false;
   Map<String, dynamic>? _scannedTicket;
-  List<POS2Extra> _availableExtras = [];
+  List<dynamic> _availableExtras = [];
   bool _showExtras = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Foco automático no campo de entrada
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scanFocusNode.requestFocus();
+    });
+  }
 
   @override
   void dispose() {
     _scanController.dispose();
+    _scanFocusNode.dispose();
     super.dispose();
   }
 
@@ -39,6 +59,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
         'color': Colors.red,
         'text': 'Inválido',
         'icon': Icons.error,
+        'textColor': Colors.white,
       };
     }
     
@@ -52,15 +73,17 @@ class _UniversalScannerState extends State<UniversalScanner> {
         'color': Colors.green,
         'text': 'Válido',
         'icon': Icons.check_circle,
+        'textColor': Colors.white,
       };
     }
     
     // Amarelo: status=0, active=0 e type=paid_invite (convite pago para ativar)
     if (status == 0 && active == 0 && type == 'paid_invite') {
       return {
-        'color': Colors.orange,
+        'color': Colors.amber,
         'text': 'Convite Pago',
         'icon': Icons.access_time,
+        'textColor': Colors.black,
       };
     }
     
@@ -70,6 +93,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
         'color': Colors.red,
         'text': 'Já Usado',
         'icon': Icons.block,
+        'textColor': Colors.white,
       };
     }
     
@@ -78,6 +102,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
       'color': Colors.grey,
       'text': 'Inativo',
       'icon': Icons.help,
+      'textColor': Colors.white,
     };
   }
 
@@ -118,7 +143,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
         // Limpar o campo após sucesso
         _scanController.clear();
         
-        POS2DebugHelper.log('Bilhete escaneado com sucesso: ${ticketData['product_name']}');
+        POS2DebugHelper.log('Bilhete escaneado com sucesso: ${ticketData['product_name'] ?? ticketData['id']}');
       } else {
         setState(() {
           _scannedTicket = {'error': result['message'] ?? 'Código não encontrado ou inválido'};
@@ -127,10 +152,12 @@ class _UniversalScannerState extends State<UniversalScanner> {
     } catch (e) {
       POS2DebugHelper.logError('Erro ao escanear código', error: e);
       setState(() {
-        _scannedTicket = {'error': 'Erro ao processar código'};
+        _scannedTicket = {'error': 'Erro ao processar código: ${e.toString()}'};
       });
     } finally {
       setState(() => _isProcessing = false);
+      // Voltar a focar o campo de entrada após processar
+      _scanFocusNode.requestFocus();
     }
   }
 
@@ -139,11 +166,8 @@ class _UniversalScannerState extends State<UniversalScanner> {
     try {
       final result = await POS2ApiService.getExtras(eventId);
       if (result['success']) {
-        final extrasData = result['data'] as List;
         setState(() {
-          _availableExtras = extrasData
-              .map((json) => POS2Extra.fromJson(json))
-              .toList();
+          _availableExtras = result['data'] as List;
         });
       }
     } catch (e) {
@@ -163,17 +187,24 @@ class _UniversalScannerState extends State<UniversalScanner> {
         'ticket_id': _scannedTicket!['id'],
       });
       
-      setState(() => _scannedTicket = null);
+      // Reset do scanner após adicionar ao carrinho
+      setState(() {
+        _scannedTicket = null;
+        _showExtras = false;
+      });
+      
+      // Voltar a focar o campo de entrada
+      _scanFocusNode.requestFocus();
     }
   }
 
   /// Adicionar extra ao carrinho (será associado ao bilhete no checkout)
-  void _handleAddExtraToCart(POS2Extra extra) {
+  void _handleAddExtraToCart(dynamic extra) {
     if (widget.onAddToCart != null && _scannedTicket != null) {
       widget.onAddToCart!({
-        'id': extra.id,
-        'name': extra.name,
-        'price': extra.price,
+        'id': extra['id'],
+        'name': extra['name'],
+        'price': extra['price'],
         'quantity': 1,
         'type': 'extra',
         'ticket_id': _scannedTicket!['id'],
@@ -183,72 +214,115 @@ class _UniversalScannerState extends State<UniversalScanner> {
         },
       });
       
-      POS2DebugHelper.log('Extra "${extra.name}" adicionado ao carrinho');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Extra "${extra['name']}" adicionado ao carrinho'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      
+      POS2DebugHelper.log('Extra "${extra['name']}" adicionado ao carrinho');
     }
   }
   
   /// Levantar um extra associado a um bilhete
-  Future<void> _handleWithdrawExtra(String? ticketCode, dynamic extraId) async {
-    if (ticketCode == null || extraId == null || _isProcessing) return;
+  Future<void> _handleWithdrawExtra(dynamic extra) async {
+    if (_scannedTicket == null || _isProcessing) return;
+    
+    final ticketCode = _scannedTicket!['ticket'];
+    final extraId = extra['id'];
+    
+    if (ticketCode == null || extraId == null) return;
     
     setState(() => _isProcessing = true);
     
     try {
       POS2DebugHelper.log('Levantando extra $extraId do bilhete $ticketCode');
       
-      // Usar o formato correto de parâmetros para a API
-      Map<String, dynamic> withdraw = {
-        '$extraId': 1  // Levantar 1 unidade do extra
-      };
+      // Chamar API com o código do bilhete e ID do extra
       
-      // Log dos dados que serão enviados
-      POS2DebugHelper.log('Enviando dados para levantar extra: ticket=$ticketCode, withdraw=$withdraw');
-      
-      final result = await POS2ApiService.withdrawExtra(ticketCode, int.parse(extraId.toString()));
+      final result = await POS2ApiService.withdrawExtra(ticketCode, extraId);
       
       if (result['success']) {
-        // Mostrar mensagem de sucesso
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? 'Extra levantado com sucesso!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+        // Atualizar o bilhete com os novos dados
+        if (result['data']?['ticket']?['extras'] != null) {
+          setState(() {
+            _scannedTicket = {
+              ..._scannedTicket!,
+              'extras': result['data']['ticket']['extras'],
+            };
+          });
+        } else {
+          // Fallback: atualizar localmente se o servidor não retornar extras atualizados
+          // Garantir que 'used' seja tratado como número
+          final int currentUsed = extra['used'] ?? 0;
+          final newUsedQuantity = currentUsed + 1;
+          
+          final updatedExtra = {
+            ...extra,
+            'used': newUsedQuantity,
+          };
+          
+          if (_scannedTicket!['extras'] is List) {
+            final List updatedExtras = List.from(_scannedTicket!['extras']);
+            final index = updatedExtras.indexWhere((e) => e['id'] == extra['id']);
+            if (index >= 0) {
+              updatedExtras[index] = updatedExtra;
+            }
+            
+            setState(() {
+              _scannedTicket = {
+                ..._scannedTicket!,
+                'extras': updatedExtras,
+              };
+            });
+          } else if (_scannedTicket!['extras'] is Map) {
+            final Map updatedExtras = Map.from(_scannedTicket!['extras']);
+            
+            // Encontrar a chave correta no mapa
+            String? targetKey;
+            updatedExtras.forEach((key, value) {
+              if (value['id'] == extra['id']) {
+                targetKey = key;
+              }
+            });
+            
+            if (targetKey != null) {
+              updatedExtras[targetKey!] = updatedExtra;
+            }
+            
+            setState(() {
+              _scannedTicket = {
+                ..._scannedTicket!,
+                'extras': updatedExtras,
+              };
+            });
+          }
         }
         
-        // Atualizar informações do bilhete para refletir as alterações
-        final updatedTicket = await POS2ApiService.getTicketByCode(ticketCode);
-        if (updatedTicket['success'] && mounted) {
-          setState(() => _scannedTicket = updatedTicket['data']);
-          POS2DebugHelper.log('Bilhete atualizado após levantar extra: ${updatedTicket['data']}');
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Extra "${extra['name']}" levantado com sucesso!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        
+        POS2DebugHelper.log('✅ Extra "${extra['name']}" levantado com sucesso!');
       } else {
-        // Mostrar mensagem de erro
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? 'Erro ao levantar extra'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        throw Exception(result['message'] ?? 'Erro ao levantar extra');
       }
     } catch (e) {
       POS2DebugHelper.logError('Erro ao levantar extra', error: e);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao levantar extra: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao levantar extra: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
+      setState(() => _isProcessing = false);
     }
   }
 
@@ -257,278 +331,515 @@ class _UniversalScannerState extends State<UniversalScanner> {
     final status = _getTicketStatus(_scannedTicket);
     
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 5.0,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Campo de input do scanner
+          // Campo de entrada do scanner
+          _buildScannerInput(),
+          
+          // Resultado do scan
+          if (_scannedTicket != null)
+            _buildScanResult(status),
+        ],
+      ),
+    );
+  }
+
+  /// Constrói o campo de entrada do scanner
+  Widget _buildScannerInput() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _scanController,
+              focusNode: _scanFocusNode,
+              decoration: InputDecoration(
+                hintText: 'Insira ou digitalize o código QR',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+              ),
+              style: const TextStyle(fontSize: 16.0),
+              onSubmitted: (_) => _handleScanSubmit(),
+              onChanged: (value) {
+                // Limpar resultado anterior quando começar a digitar novo código
+                if (_scannedTicket != null) {
+                  setState(() {
+                    _scannedTicket = null;
+                    _availableExtras = [];
+                    _showExtras = false;
+                  });
+                }
+              },
+              enabled: !_isProcessing,
+            ),
+          ),
+          const SizedBox(width: 8.0),
+          ElevatedButton(
+            onPressed: _isProcessing || _scanController.text.trim().isEmpty 
+                ? null 
+                : _handleScanSubmit,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+            ),
+            child: _isProcessing
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.0,
+                        ),
+                      ),
+                      SizedBox(width: 8.0),
+                      Text('Processando...'),
+                    ],
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.search, size: 18.0),
+                      SizedBox(width: 8.0),
+                      Text('Procurar'),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Constrói o resultado do scan
+  Widget _buildScanResult(Map<String, dynamic> status) {
+    return Container(
+      margin: const EdgeInsets.only(top: 16.0),
+      child: _scannedTicket!.containsKey('error')
+          ? _buildErrorResult()
+          : _buildTicketResult(status),
+    );
+  }
+
+  /// Constrói o resultado de erro
+  Widget _buildErrorResult() {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        border: Border.all(color: Colors.red.shade200),
+        borderRadius: BorderRadius.circular(4.0),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error, color: Colors.red),
+          const SizedBox(width: 8.0),
+          Expanded(
+            child: Text(
+              _scannedTicket!['error'].toString(),
+              style: TextStyle(color: Colors.red.shade900),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              setState(() => _scannedTicket = null);
+              _scanFocusNode.requestFocus();
+            },
+            splashRadius: 24.0,
+            color: Colors.red.shade700,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Constrói o resultado do bilhete
+  Widget _buildTicketResult(Map<String, dynamic> status) {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: status['color'].withOpacity(0.1),
+        border: Border.all(color: status['color'].withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(4.0),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _scanController,
-                  decoration: InputDecoration(
-                    hintText: 'Insira ou digitalize o código QR',
-                    prefixIcon: const Icon(Icons.qr_code_scanner),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Cabeçalho com status
+                    Row(
+                      children: [
+                        Icon(status['icon'], color: status['color']),
+                        const SizedBox(width: 8.0),
+                        Text(
+                          'Bilhete ${status['text']}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: status['color'],
+                          ),
+                        ),
+                      ],
                     ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                  enabled: !_isProcessing,
-                  autofocus: true,
-                  onSubmitted: (_) => _handleScanSubmit(),
-                  onChanged: (value) {
-                    // Limpar resultado anterior quando começar a digitar
-                    if (_scannedTicket != null) {
-                      setState(() {
-                        _scannedTicket = null;
-                        _availableExtras = [];
-                        _showExtras = false;
-                      });
-                    }
-                  },
+                    const SizedBox(height: 16.0),
+                    
+                    // Detalhes do bilhete
+                    RichText(
+                      text: TextSpan(
+                        style: DefaultTextStyle.of(context).style,
+                        children: [
+                          const TextSpan(
+                            text: 'Bilhete: ',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          TextSpan(
+                            text: _scannedTicket!['product_name'] ?? 'ID: ${_scannedTicket!['id']}',
+                          ),
+                          const TextSpan(text: ' | '),
+                          const TextSpan(
+                            text: 'Evento: ',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          TextSpan(
+                            text: _scannedTicket!['event_name'] ?? 'N/A',
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Nome do cliente (se disponível)
+                    if (_scannedTicket!['name'] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: RichText(
+                          text: TextSpan(
+                            style: DefaultTextStyle.of(context).style,
+                            children: [
+                              const TextSpan(
+                                text: 'Cliente: ',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              TextSpan(text: _scannedTicket!['name']),
+                            ],
+                          ),
+                        ),
+                      ),
+                    
+                    // Extras no bilhete (se existirem)
+                    if (_scannedTicket!['extras'] != null && 
+                        (_scannedTicket!['extras'] is List ? 
+                          (_scannedTicket!['extras'] as List).isNotEmpty : 
+                          (_scannedTicket!['extras'] as Map).isNotEmpty))
+                      _buildTicketExtras(),
+                    
+                    // Ações específicas por status
+                    if (status['text'] == 'Convite Pago')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16.0),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: const Text('Ativar Convite (Adicionar ao Carrinho)'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amber,
+                            foregroundColor: Colors.black,
+                          ),
+                          onPressed: _handleActivatePaidInvite,
+                        ),
+                      ),
+                    
+                    // Extras disponíveis para adicionar
+                    if (_showExtras && _availableExtras.isNotEmpty)
+                      _buildAvailableExtras(),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _scanController.text.trim().isEmpty || _isProcessing 
-                    ? null 
-                    : _handleScanSubmit,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  backgroundColor: const Color(0xFF667eea),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: _isProcessing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(Icons.search),
+              
+              // Botão para fechar
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  setState(() {
+                    _scannedTicket = null;
+                    _showExtras = false;
+                    _availableExtras = [];
+                  });
+                  _scanFocusNode.requestFocus();
+                },
+                splashRadius: 24.0,
+                color: Colors.grey,
               ),
             ],
           ),
-          
-          const SizedBox(height: 16),
-          
-          // Resultado do scan
-          if (_scannedTicket != null) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: status['color'].withAlpha(20),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: status['color'], width: 1),
+        ],
+      ),
+    );
+  }
+
+  /// Constrói a seção de extras no bilhete
+  Widget _buildTicketExtras() {
+    // Determinar se os extras estão em formato de lista ou mapa
+    List<dynamic> extrasAsList = [];
+    
+    if (_scannedTicket!['extras'] is List) {
+      extrasAsList = _scannedTicket!['extras'];
+    } else if (_scannedTicket!['extras'] is Map) {
+      extrasAsList = (_scannedTicket!['extras'] as Map).values.toList();
+    } else {
+      return const SizedBox.shrink();  // Tipo não suportado
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.only(top: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.restaurant, size: 14.0, color: Colors.grey),
+                  SizedBox(width: 4.0),
+                  Text(
+                    'Extras no bilhete:',
+                    style: TextStyle(
+                      fontSize: 12.0,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header do resultado
-                  Row(
-                    children: [
-                      Icon(
-                        status['icon'],
-                        color: status['color'],
-                        size: 20,
+              
+              // Botão para mostrar extras disponíveis
+              if ((_getTicketStatus(_scannedTicket)['color'] == Colors.green || 
+                   _getTicketStatus(_scannedTicket)['color'] == Colors.amber) && 
+                  _availableExtras.isNotEmpty)
+                TextButton.icon(
+                  icon: Icon(
+                    _showExtras ? Icons.remove : Icons.add,
+                    size: 14.0,
+                  ),
+                  label: Text(_showExtras ? 'Esconder Extras' : 'Adicionar Extras'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: Theme.of(context).primaryColor,
+                    textStyle: const TextStyle(fontSize: 12.0),
+                  ),
+                  onPressed: () {
+                    setState(() => _showExtras = !_showExtras);
+                  },
+                ),
+            ],
+          ),
+          
+          const SizedBox(height: 8.0),
+          
+          // Lista de extras no bilhete
+          Column(
+            children: extrasAsList.map((extra) {
+              // Converter qty para int, já que pode vir como string do backend
+              final int qty = int.tryParse(extra['qty']?.toString() ?? '0') ?? 0;
+              final int used = extra['used'] ?? 0;
+              final int available = qty - used;
+              final bool isAvailable = available > 0;
+              
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      extra['name'] ?? 'Extra',
+                      style: TextStyle(
+                        color: isAvailable ? Colors.black : Colors.grey,
                       ),
-                      const SizedBox(width: 8),
+                    ),
+                    Row(
+                      children: [
+                        // Botão para levantar extra
+                        if (isAvailable)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: ElevatedButton(
+                              onPressed: () => _handleWithdrawExtra(extra),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                visualDensity: VisualDensity.compact,
+                                textStyle: const TextStyle(fontSize: 12.0),
+                              ),
+                              child: const Text('LEVANTAR'),
+                            ),
+                          ),
+                        
+                        // Badge com contagem
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                          decoration: BoxDecoration(
+                            color: isAvailable ? Colors.green : Colors.grey,
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
+                          child: Text(
+                            isAvailable ? 'Disponível: $available' : 'Esgotado',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12.0,
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(width: 4.0),
+                        
+                        // Contagem de uso
+                        Text(
+                          '(${used}/${qty})',
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Constrói a seção de extras disponíveis para adicionar
+  Widget _buildAvailableExtras() {
+    return Container(
+      margin: const EdgeInsets.only(top: 16.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5.0,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Extras Disponíveis:',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14.0,
+            ),
+          ),
+          
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
+            child: Row(
+              children: const [
+                Icon(Icons.info_outline, size: 14.0, color: Colors.grey),
+                SizedBox(width: 4.0),
+                Expanded(
+                  child: Text(
+                    'Os extras serão adicionados ao bilhete apenas após o pagamento no checkout.',
+                    style: TextStyle(
+                      fontSize: 12.0,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Grid de extras disponíveis
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 3.0,
+              crossAxisSpacing: 8.0,
+              mainAxisSpacing: 8.0,
+            ),
+            itemCount: _availableExtras.length,
+            itemBuilder: (context, index) {
+              final extra = _availableExtras[index];
+              
+              return Card(
+                elevation: 1.0,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        'Bilhete ${status['text']}',
-                        style: TextStyle(
+                        extra['name'] ?? 'Extra',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: status['color'],
-                          fontSize: 16,
+                          fontSize: 12.0,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '€${(extra['price'] ?? 0.0).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 11.0,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 4.0),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => _handleAddExtraToCart(extra),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 0.0),
+                            visualDensity: VisualDensity.compact,
+                            textStyle: const TextStyle(fontSize: 10.0),
+                          ),
+                          child: const Text('Adicionar ao Carrinho'),
                         ),
                       ),
                     ],
                   ),
-                  
-                  if (_scannedTicket!.containsKey('error')) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _scannedTicket!['error'],
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 12),
-                    
-                    // Informações do bilhete
-                    Text(
-                      'Bilhete: ${_scannedTicket!['product_name'] ?? 'ID: ${_scannedTicket!['id']}'}',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Evento: ${_scannedTicket!['event_name'] ?? 'N/A'}',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    
-                    if (_scannedTicket!['name'] != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Cliente: ${_scannedTicket!['name']}',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                    ],
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Mostrar extras já associados ao bilhete
-                    if (_scannedTicket!['extras'] != null && _scannedTicket!['extras'] is Map && _scannedTicket!['extras'].isNotEmpty) ...[
-                      const Divider(),
-                      const SizedBox(height: 8),
-                      const Row(
-                        children: [
-                          Icon(Icons.fastfood, size: 16, color: Colors.grey),
-                          SizedBox(width: 4),
-                          Text(
-                            'Extras no bilhete:',
-                            style: TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      ...(_scannedTicket!['extras'] as Map).entries.map((entry) {
-                        final extra = entry.value;
-                        final used = extra['used'] ?? 0;
-                        final qty = extra['qty'] ?? 0;
-                        final available = qty - used;
-                        
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        extra['name'] ?? 'Extra',
-                                        style: const TextStyle(fontWeight: FontWeight.w500),
-                                      ),
-                                      Text(
-                                        'Disponível: $available/$qty',
-                                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (available > 0) ...[
-                                  ElevatedButton(
-                                    onPressed: _isProcessing
-                                        ? null
-                                        : () => _handleWithdrawExtra(
-                                            _scannedTicket!['ticket'],
-                                            extra['id'],
-                                          ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.amber,
-                                      foregroundColor: Colors.black,
-                                    ),
-                                    child: _isProcessing
-                                        ? const SizedBox(
-                                            width: 20, 
-                                            height: 20, 
-                                            child: CircularProgressIndicator(
-                                              color: Colors.black, 
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Text('LEVANTAR'),
-                                  ),
-                                ],
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: available > 0 ? Colors.green : Colors.grey,
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Text(
-                                    'Disponível: $available',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                    
-                    // Ações baseadas no status
-                    if (status['text'] == 'Convite Pago') ...[
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _handleActivatePaidInvite,
-                          icon: const Icon(Icons.shopping_cart_checkout),
-                          label: const Text('Ativar Convite'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                    
-                    // Mostrar extras disponíveis para adicionar
-                    if ((status['text'] == 'Válido' || status['text'] == 'Convite Pago') && 
-                        _availableExtras.isNotEmpty) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Extras disponíveis:',
-                            style: TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              setState(() => _showExtras = !_showExtras);
-                            },
-                            child: Text(_showExtras ? 'Ocultar' : 'Ver Extras'),
-                          ),
-                        ],
-                      ),
-                      
-                      if (_showExtras) ...[
-                        const SizedBox(height: 8),
-                        ...(_availableExtras.map((extra) => Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            title: Text(extra.name),
-                            subtitle: Text('€${extra.price.toStringAsFixed(2)}'),
-                            trailing: IconButton(
-                              onPressed: () => _handleAddExtraToCart(extra),
-                              icon: const Icon(Icons.add_shopping_cart),
-                              color: const Color(0xFF667eea),
-                            ),
-                          ),
-                        ))),
-                      ],
-                    ],
-                  ],
-                ],
-              ),
-            ),
-          ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
