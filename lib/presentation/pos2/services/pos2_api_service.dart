@@ -564,30 +564,31 @@ class POS2ApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         
+        POS2DebugHelper.log('Estrutura completa da resposta: ${jsonEncode(data)}');
+        
         if (data['success'] == true && data['data'] != null) {
-          // Log para debug da estrutura dos dados retornados
-          POS2DebugHelper.log('Dados recebidos da API: ${jsonEncode(data['data'])}');
+          // SIMPLIFICADO! Usar dados limpos diretamente
+          final innerData = data['data'];
           
-          final printData = data['data']['print_data_base64'];
-          if (printData == null || printData.isEmpty) {
-            POS2DebugHelper.logError('Dados de impressão vazios na resposta da API');
-          } else {
-            POS2DebugHelper.log('Dados de impressão recebidos: ${printData.length} caracteres');
+          if (innerData['dados_para_fatura'] != null) {
+            final dadosParaFatura = innerData['dados_para_fatura'];
+            
+            POS2DebugHelper.log('Dados limpos recebidos - usando diretamente!');
+            
+            return {
+              'success': true,
+              'dados_limpos': dadosParaFatura, // Dados limpos diretos!
+              'invoice_number': dadosParaFatura['invoice_number'],
+              'invoice_date': dadosParaFatura['invoice_time'],
+              'print_format': 'dados_limpos', // Novo formato simplificado
+            };
           }
-          
-          return {
-            'success': true,
-            'data': data['data'],
-            'print_data_base64': data['data']['print_data_base64'],
-            'invoice_number': data['data']['invoice_number'],
-            'invoice_date': data['data']['invoice_date'],
-          };
-        } else {
-          return {
-            'success': false,
-            'message': data['message'] ?? 'Dados de impressão não encontrados',
-          };
         }
+        
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Dados de impressão não encontrados',
+        };
       } else {
         final errorData = jsonDecode(response.body);
         return {
