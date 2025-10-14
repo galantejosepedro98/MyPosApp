@@ -214,6 +214,9 @@ class POS2ApiService {
           'order': data['order'],
           'tickets': data['tickets'],
           'invoice_url': data['invoice_url'],
+          // Adicionar dados do QR Físico
+          'hasPhysicalQr': data['hasPhysicalQr'] ?? false,
+          'physicalQrTickets': data['physicalQrTickets'] ?? [],
         };
       } else {
         final errorData = jsonDecode(response.body);

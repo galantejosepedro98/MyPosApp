@@ -10,6 +10,7 @@ import '../services/pos2_permission_helper.dart';
 import '../services/print_service.dart';
 import '../widgets/pos2_loading_overlay.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'pos2_physical_qr_view.dart';
 
 /// Tela de checkout para o sistema POS2
 /// Implementada de acordo com o design do website
@@ -312,6 +313,19 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
 
   // Diálogo de sucesso
   void _showSuccessDialog(Map<String, dynamic> result) {
+    // Verificar se tem QR Físico para processar (mas não navegar ainda)
+    final hasPhysicalQr = result['data']?['hasPhysicalQr'] ?? false;
+    final physicalQrTickets = result['data']?['physicalQrTickets'] as List<dynamic>?;
+    List<int>? ticketIds;
+    
+    if (hasPhysicalQr && physicalQrTickets != null && physicalQrTickets.isNotEmpty) {
+      ticketIds = physicalQrTickets
+          .map((t) => t['id'] as int)
+          .toList();
+      POS2DebugHelper.log('POS2Checkout: QR Físico detectado com ${ticketIds.length} tickets');
+    }
+    
+    // Mostrar sempre o diálogo de sucesso
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -349,6 +363,9 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
               // Botão para imprimir fatura
               OutlinedButton.icon(
                 onPressed: () async {
+                  // Capturar context antes de operações assíncronas
+                  final navigatorContext = context;
+                  
                   // Obtém o ID da ORDER (não invoice_id!) do resultado da API 
                   String? orderIdStr;
                   
@@ -364,23 +381,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                   
                   final int? orderId = int.tryParse(orderIdStr ?? '');
                   
-                  // Fecha o diálogo
-                  Navigator.of(context).pop();
-                  
-                  // IMPORTANTE: Reset do estado de loading
-                  setState(() {
-                    _isLoading = false;
-                  });
-                  
-                  // Voltar ao dashboard
-                  Navigator.of(context).pop();
-                  
-                  // Executar refresh do dashboard (limpa carrinho + recarrega)
-                  if (widget.onRefresh != null) {
-                    widget.onRefresh!();
-                  }
-                  
-                  // Chama o novo serviço de impressão Vendus se o ID da ORDER estiver disponível
+                  // Chama o serviço de impressão Vendus se o ID da ORDER estiver disponível
                   if (orderId != null) {
                     final printResult = await PrintService.printOrderReceipt(orderId);
                     
@@ -401,6 +402,29 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                       backgroundColor: Colors.red,
                     );
                   }
+                  
+                  // Verificar se ainda está montado após operações async
+                  if (!mounted) return;
+                  
+                  // Fecha o diálogo
+                  // ignore: use_build_context_synchronously
+                  Navigator.of(navigatorContext).pop();
+                  
+                  // Verificar se precisa processar QR Físico
+                  if (ticketIds != null && ticketIds.isNotEmpty) {
+                    // Tem QR Físico: Navegar para a tela de QR sem fechar checkout
+                    _navigateToPhysicalQr(ticketIds);
+                  } else {
+                    // Não tem QR Físico: Voltar ao dashboard normalmente
+                    setState(() {
+                      _isLoading = false;
+                    });
+                    // ignore: use_build_context_synchronously
+                    Navigator.of(navigatorContext).pop();
+                    if (widget.onRefresh != null) {
+                      widget.onRefresh!();
+                    }
+                  }
                 },
                 icon: const Icon(Icons.print),
                 label: const Text('Imprimir Fatura'),
@@ -413,17 +437,19 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
             onPressed: () {
               Navigator.of(context).pop(); // Fecha o diálogo
               
-              // Reset do estado de loading
-              setState(() {
-                _isLoading = false;
-              });
-              
-              // Voltar ao dashboard
-              Navigator.of(context).pop();
-              
-              // Executar refresh do dashboard (limpa carrinho + recarrega)
-              if (widget.onRefresh != null) {
-                widget.onRefresh!();
+              // Verificar se precisa processar QR Físico
+              if (ticketIds != null && ticketIds.isNotEmpty) {
+                // Tem QR Físico: Navegar para a tela de QR sem refresh
+                _navigateToPhysicalQr(ticketIds);
+              } else {
+                // Não tem QR Físico: Voltar ao dashboard normalmente
+                setState(() {
+                  _isLoading = false;
+                });
+                Navigator.of(context).pop();
+                if (widget.onRefresh != null) {
+                  widget.onRefresh!();
+                }
               }
             },
             child: const Text('CONCLUIR'),
@@ -431,6 +457,31 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
         ],
       ),
     );
+  }
+
+  /// Navegar para a tela de processamento de QR Físico
+  void _navigateToPhysicalQr(List<int> ticketIds) {
+    POS2DebugHelper.log('POS2Checkout: Navegando para QR Físico com ${ticketIds.length} tickets');
+    
+    // Reset estado antes de navegar
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Fechar a tela de checkout
+    Navigator.of(context).pop();
+    
+    // Navegar para a tela de QR Físico
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => POS2PhysicalQrView(ticketIds: ticketIds),
+      ),
+    ).then((_) {
+      // Quando voltar da tela de QR, fazer refresh do dashboard
+      if (widget.onRefresh != null) {
+        widget.onRefresh!();
+      }
+    });
   }
 
   // Método para calcular troco foi simplificado para mobile

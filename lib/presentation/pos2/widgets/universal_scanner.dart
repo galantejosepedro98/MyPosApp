@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:my_pos/my_pos.dart';
 import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
 import '../services/pos2_cart_service.dart';
@@ -16,12 +17,16 @@ class UniversalScanner extends StatefulWidget {
   
   /// ID do evento selecionado (opcional)
   final int? selectedEventId;
+  
+  /// Abrir scanner MyPOS automaticamente ao iniciar
+  final bool autoOpenScanner;
 
   const UniversalScanner({
     super.key,
     this.onScanResult,
     this.onAddToCart,
     this.selectedEventId,
+    this.autoOpenScanner = false,
   });
 
   @override
@@ -40,9 +45,16 @@ class _UniversalScannerState extends State<UniversalScanner> {
   @override
   void initState() {
     super.initState();
-    // Foco automático no campo de entrada
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scanFocusNode.requestFocus();
+      // Abrir scanner MyPOS automaticamente se configurado
+      if (widget.autoOpenScanner) {
+        _openMyPosScanner();
+      } else {
+        // Só dar foco ao campo de texto se NÃO for auto-abrir o scanner
+        // (para evitar abrir o teclado desnecessariamente)
+        _scanFocusNode.requestFocus();
+      }
     });
   }
 
@@ -162,6 +174,37 @@ class _UniversalScannerState extends State<UniversalScanner> {
         setState(() => _isProcessing = false);
         // Voltar a focar o campo de entrada após processar
         _scanFocusNode.requestFocus();
+      }
+    }
+  }
+
+  /// Abrir scanner MyPOS nativo
+  Future<void> _openMyPosScanner() async {
+    if (_isProcessing) return;
+    
+    try {
+      POS2DebugHelper.log('Abrindo scanner MyPOS...');
+      
+      // Abrir scanner do MyPOS
+      final result = await MyPos.openScanner();
+      
+      if (result != null && result.isNotEmpty) {
+        // Preencher o campo com o código escaneado
+        _scanController.text = result;
+        
+        // Processar automaticamente
+        await _handleScanSubmit();
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao abrir scanner MyPOS', error: e);
+      // Mostrar mensagem de erro se montado
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao abrir scanner: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -399,39 +442,56 @@ class _UniversalScannerState extends State<UniversalScanner> {
             ),
           ),
           const SizedBox(width: 8.0),
-          ElevatedButton(
+          // Botão do scanner MyPOS
+          IconButton(
+            onPressed: _isProcessing ? null : _openMyPosScanner,
+            icon: const Icon(Icons.qr_code_scanner),
+            color: Theme.of(context).primaryColor,
+            iconSize: 28.0,
+            tooltip: 'Abrir Scanner MyPOS',
+            padding: const EdgeInsets.all(12.0),
+            constraints: const BoxConstraints(
+              minWidth: 48.0,
+              minHeight: 48.0,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.grey[200],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4.0),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4.0),
+          // Botão de procurar
+          IconButton(
             onPressed: _isProcessing || _scanController.text.trim().isEmpty 
                 ? null 
                 : _handleScanSubmit,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Colors.white,
-            ),
-            child: _isProcessing
-                ? const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.0,
-                        ),
-                      ),
-                      SizedBox(width: 8.0),
-                      Text('Processando...'),
-                    ],
+            icon: _isProcessing 
+                ? const SizedBox(
+                    width: 20.0,
+                    height: 20.0,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.0,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
                   )
-                : const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.search, size: 18.0),
-                      SizedBox(width: 8.0),
-                      Text('Procurar'),
-                    ],
-                  ),
+                : const Icon(Icons.search),
+            color: Colors.white,
+            iconSize: 28.0,
+            tooltip: 'Procurar',
+            padding: const EdgeInsets.all(12.0),
+            constraints: const BoxConstraints(
+              minWidth: 48.0,
+              minHeight: 48.0,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              disabledBackgroundColor: Colors.grey[300],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4.0),
+              ),
+            ),
           ),
         ],
       ),
@@ -562,44 +622,32 @@ class _UniversalScannerState extends State<UniversalScanner> {
                         (_scannedTicket!['extras'] is List ? 
                           (_scannedTicket!['extras'] as List).isNotEmpty : 
                           (_scannedTicket!['extras'] as Map).isNotEmpty))
-                      _buildTicketExtras(false), // Não mostrar botão aqui, vamos mostrar abaixo
+                      _buildTicketExtras(false),
                     
                     // Botão para adicionar extras (para bilhetes válidos e convites pagos)
                     if (status['text'] == 'Válido' || status['text'] == 'Convite Pago')
                       Padding(
-                        padding: const EdgeInsets.only(top: 16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Row(
-                              children: [
-                                  Icon(Icons.restaurant, size: 16.0, color: Colors.grey),
-                                  SizedBox(width: 4.0),
-                                  Text(
-                                    'Extras:',
-                                    style: TextStyle(
-                                      fontSize: 14.0,
-                                      color: Colors.grey,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
+                        padding: const EdgeInsets.only(top: 12.0),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            icon: Icon(
+                              _showExtras ? Icons.expand_less : Icons.add_circle_outline,
+                              size: 18.0,
                             ),
-                            TextButton.icon(
-                              icon: Icon(
-                                _showExtras ? Icons.remove : Icons.add,
-                                size: 16.0,
+                            label: Text(_showExtras ? 'Esconder Extras' : 'Adicionar Extras ao Bilhete'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12.0),
+                              foregroundColor: Theme.of(context).primaryColor,
+                              side: BorderSide(color: Theme.of(context).primaryColor),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6.0),
                               ),
-                              label: Text(_showExtras ? 'Esconder Extras' : 'Adicionar Extras'),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
-                                foregroundColor: Theme.of(context).primaryColor,
-                              ),
-                              onPressed: () {
-                                setState(() => _showExtras = !_showExtras);
-                              },
                             ),
-                          ],
+                            onPressed: () {
+                              setState(() => _showExtras = !_showExtras);
+                            },
+                          ),
                         ),
                       ),
                     
@@ -660,124 +708,114 @@ class _UniversalScannerState extends State<UniversalScanner> {
     }
     
     return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
+      padding: const EdgeInsets.only(top: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Cabeçalho
+          const Row(
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.restaurant, size: 14.0, color: Colors.grey),
-                  SizedBox(width: 4.0),
-                  Text(
-                    'Extras no bilhete:',
-                    style: TextStyle(
-                      fontSize: 12.0,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-              
-              // Botão para mostrar extras disponíveis (opcional)
-              if (showButton && 
-                 (_getTicketStatus(_scannedTicket)['color'] == Colors.green || 
-                  _getTicketStatus(_scannedTicket)['color'] == Colors.amber))
-                TextButton.icon(
-                  icon: Icon(
-                    _showExtras ? Icons.remove : Icons.add,
-                    size: 14.0,
-                  ),
-                  label: Text(_showExtras ? 'Esconder Extras' : 'Adicionar Extras'),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: Theme.of(context).primaryColor,
-                    textStyle: const TextStyle(fontSize: 12.0),
-                  ),
-                  onPressed: () {
-                    setState(() => _showExtras = !_showExtras);
-                  },
+              Icon(Icons.restaurant_menu, size: 16.0, color: Colors.orange),
+              SizedBox(width: 6.0),
+              Text(
+                'Extras no Bilhete',
+                style: TextStyle(
+                  fontSize: 13.0,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
                 ),
+              ),
             ],
           ),
           
           const SizedBox(height: 8.0),
           
-          // Lista de extras no bilhete
-          Column(
-            children: extrasAsList.map((extra) {
-              // Converter qty para int, já que pode vir como string do backend
-              final int qty = int.tryParse(extra['qty']?.toString() ?? '0') ?? 0;
-              final int used = extra['used'] ?? 0;
-              final int available = qty - used;
-              final bool isAvailable = available > 0;
-              
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      extra['name'] ?? 'Extra',
-                      style: TextStyle(
-                        color: isAvailable ? Colors.black : Colors.grey,
+          // Lista de extras no bilhete - Cada extra num card compacto
+          ...extrasAsList.map((extra) {
+            // Converter qty para int, já que pode vir como string do backend
+            final int qty = int.tryParse(extra['qty']?.toString() ?? '0') ?? 0;
+            final int used = extra['used'] ?? 0;
+            final int available = qty - used;
+            final bool isAvailable = available > 0;
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6.0),
+              padding: const EdgeInsets.all(10.0),
+              decoration: BoxDecoration(
+                color: isAvailable ? Colors.orange.shade50 : Colors.grey.shade100,
+                border: Border.all(
+                  color: isAvailable ? Colors.orange.shade200 : Colors.grey.shade300,
+                  width: 1.0,
+                ),
+                borderRadius: BorderRadius.circular(6.0),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Linha 1: Nome do extra + Status badge
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          extra['name'] ?? 'Extra',
+                          style: TextStyle(
+                            fontSize: 13.0,
+                            fontWeight: FontWeight.w600,
+                            color: isAvailable ? Colors.black87 : Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                        decoration: BoxDecoration(
+                          color: isAvailable ? Colors.green : Colors.grey,
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        child: Text(
+                          '$available / $qty',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.0,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  // Linha 2: Botão de levantar (só se disponível)
+                  if (isAvailable) ...[
+                    const SizedBox(height: 8.0),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _handleWithdrawExtra(extra),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10.0),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6.0),
+                          ),
+                        ),
+                        icon: const Icon(Icons.download, size: 18.0),
+                        label: const Text(
+                          'LEVANTAR EXTRA',
+                          style: TextStyle(
+                            fontSize: 12.0,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                       ),
                     ),
-                    Row(
-                      children: [
-                        // Botão para levantar extra
-                        if (isAvailable)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: ElevatedButton(
-                              onPressed: () => _handleWithdrawExtra(extra),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.amber,
-                                foregroundColor: Colors.black,
-                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                visualDensity: VisualDensity.compact,
-                                textStyle: const TextStyle(fontSize: 12.0),
-                              ),
-                              child: const Text('LEVANTAR'),
-                            ),
-                          ),
-                        
-                        // Badge com contagem
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-                          decoration: BoxDecoration(
-                            color: isAvailable ? Colors.green : Colors.grey,
-                            borderRadius: BorderRadius.circular(10.0),
-                          ),
-                          child: Text(
-                            isAvailable ? 'Disponível: $available' : 'Esgotado',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12.0,
-                            ),
-                          ),
-                        ),
-                        
-                        const SizedBox(width: 4.0),
-                        
-                        // Contagem de uso
-                        Text(
-                          '($used/$qty)',
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12.0,
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
-                ),
-              );
-            }).toList(),
-          ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -785,31 +823,109 @@ class _UniversalScannerState extends State<UniversalScanner> {
 
   /// Constrói a seção de extras disponíveis para adicionar
   Widget _buildAvailableExtras() {
-    return Container(
-      margin: const EdgeInsets.only(top: 12.0),
-      child: Column(
-        children: _availableExtras.map((extra) {
-          return Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 8.0),
-            child: ElevatedButton(
-              onPressed: () => _handleAddExtraToCart(extra),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+    if (_availableExtras.isEmpty) {
+      return Container(
+        margin: const EdgeInsets.only(top: 12.0),
+        padding: const EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(6.0),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 16.0, color: Colors.grey.shade600),
+            const SizedBox(width: 8.0),
+            Expanded(
+              child: Text(
+                'Não há extras disponíveis para adicionar a este bilhete',
+                style: TextStyle(
+                  fontSize: 12.0,
+                  color: Colors.grey.shade700,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
-              child: Text(
-                '${extra['name'] ?? 'Extra'} - €${(extra['price'] ?? 0.0).toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 14.0, fontWeight: FontWeight.w500),
-                textAlign: TextAlign.center,
-              ),
             ),
-          );
-        }).toList(),
+          ],
+        ),
+      );
+    }
+    
+    return Container(
+      margin: const EdgeInsets.only(top: 12.0),
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        border: Border.all(color: Colors.green.shade200),
+        borderRadius: BorderRadius.circular(6.0),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabeçalho
+          Row(
+            children: [
+              Icon(Icons.add_shopping_cart, size: 16.0, color: Colors.green.shade700),
+              const SizedBox(width: 6.0),
+              Text(
+                'Adicionar Novos Extras',
+                style: TextStyle(
+                  fontSize: 13.0,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green.shade900,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 10.0),
+          
+          // Lista de extras disponíveis - Grid para aproveitar melhor o espaço
+          ..._availableExtras.map((extra) {
+            return Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 6.0),
+              child: ElevatedButton(
+                onPressed: () => _handleAddExtraToCart(extra),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6.0),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        extra['name'] ?? 'Extra',
+                        style: const TextStyle(
+                          fontSize: 13.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Text(
+                          '€${(extra['price'] ?? 0.0).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 13.0,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 6.0),
+                        const Icon(Icons.add_circle, size: 18.0),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

@@ -93,6 +93,12 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
       setState(() {
         _events = result['data'] as List<POS2Event>;
       });
+      
+      // Se houver apenas um evento ativo, selecionar automaticamente
+      if (_events.length == 1) {
+        POS2DebugHelper.log('Apenas um evento disponível - selecionando automaticamente: ${_events[0].name}');
+        await _selectEvent(_events[0]);
+      }
     } else {
       _showError('Erro ao carregar eventos: ${result['message']}');
     }
@@ -172,20 +178,97 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
     }
   }
 
+  /// Mostrar diálogo de confirmação de logout
+  Future<bool?> _showLogoutConfirmationDialog() async {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // Não fechar ao clicar fora
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.0),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.logout, color: Colors.orange.shade700, size: 28),
+              const SizedBox(width: 12),
+              const Text(
+                'Confirmar Logout',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Tem a certeza que deseja sair do POS 2.0?\n\nSerá redirecionado para a página de login.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+              child: const Text(
+                'Sim, Sair',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            if (_selectedEvent == null) _buildEventSelector(),
-            if (_selectedEvent != null) _buildMainContent(),
-          ],
+    return PopScope(
+      canPop: false, // Não permitir pop automático
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        
+        // Mostrar diálogo de confirmação de logout
+        final shouldLogout = await _showLogoutConfirmationDialog();
+        if (shouldLogout == true && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1A1A1A),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              if (_selectedEvent == null) _buildEventSelector(),
+              if (_selectedEvent != null) _buildMainContent(),
+            ],
+          ),
         ),
+        bottomNavigationBar: _selectedEvent != null ? _buildPersistentCartBar() : null,
       ),
-      bottomNavigationBar: _selectedEvent != null ? _buildPersistentCartBar() : null,
     );
   }
 
@@ -909,12 +992,13 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
+        insetPadding: const EdgeInsets.all(8),
         child: Container(
-          height: MediaQuery.of(context).size.height * 0.7,
+          height: MediaQuery.of(context).size.height * 0.95,
+          width: MediaQuery.of(context).size.width,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
             children: [
@@ -922,7 +1006,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
                 padding: const EdgeInsets.all(16),
                 decoration: const BoxDecoration(
                   color: Color(0xFF667eea),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                 ),
                 child: Row(
                   children: [
@@ -930,7 +1014,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Text(
-                        'Scanner QR/Código de Barras',
+                        'Scanner',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -948,6 +1032,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
               Expanded(
                 child: UniversalScanner(
                   selectedEventId: _selectedEvent?.id,
+                  autoOpenScanner: true, // Abrir scanner MyPOS automaticamente
                   onScanResult: (ticketData) {
                     POS2DebugHelper.log('Bilhete escaneado: ${ticketData['product_name'] ?? ticketData['name']}');
                   },
