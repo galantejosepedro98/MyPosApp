@@ -16,16 +16,17 @@ class PrintService {
     
     final result = await POS2ApiService.getReceiptPrintData(orderId);
     
-    // Adicionar log para debug
+    // Log para dados limpos
     if (result['success'] == true) {
       POS2DebugHelper.log('PrintService: Dados de impressão obtidos com sucesso');
       
-      // Log dos dados recebidos da API para debug
-      if (result['data'] != null) {
-        final data = result['data'];
-        POS2DebugHelper.log('PrintService: Dados disponíveis - print_data_base64: ${data['print_data_base64'] != null ? "SIM" : "NÃO"}');
-        POS2DebugHelper.log('PrintService: Format: ${data['print_format'] ?? "não especificado"}');
-        POS2DebugHelper.log('PrintService: Invoice: ${data['invoice_number'] ?? "não especificado"}');
+      // Log dos dados limpos recebidos
+      if (result['dados_limpos'] != null) {
+        POS2DebugHelper.log('PrintService: Dados limpos disponíveis: SIM');
+        POS2DebugHelper.log('PrintService: Format: dados_limpos');
+        POS2DebugHelper.log('PrintService: Invoice: ${result['invoice_number'] ?? "não especificado"}');
+      } else {
+        POS2DebugHelper.log('PrintService: Dados limpos disponíveis: NÃO');
       }
     } else {
       POS2DebugHelper.logError('PrintService: Falha ao obter dados de impressão', 
@@ -126,7 +127,7 @@ class PrintService {
       paper.addText("$type $number", alignment: PrinterAlignment.center);
       
       // Versão e data
-      final version = receiptData['version'] ?? 'Original'; 
+      const version = 'Original'; // Sempre "Original" independentemente do que vem da API
       final date = receiptData['invoice_time'] ?? '';
       paper.addText("$version - $date", alignment: PrinterAlignment.left);
       paper.addText("--------------------------------", 

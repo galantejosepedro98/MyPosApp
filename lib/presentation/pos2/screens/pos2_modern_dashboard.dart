@@ -844,7 +844,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
           ElevatedButton.icon(
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const POS2CheckoutView()),
+                MaterialPageRoute(builder: (context) => POS2CheckoutView(onRefresh: _refreshEventData)),
               );
             },
             style: ElevatedButton.styleFrom(

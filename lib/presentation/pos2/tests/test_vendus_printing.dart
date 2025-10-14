@@ -31,7 +31,7 @@ class _VendusPrintTestPageState extends State<VendusPrintTestPage> {
   Future<void> _testVendusInvoice() async {
     setState(() {
       _isLoading = true;
-      _resultMessage = 'Obtendo dados para o pedido #22680...';
+      _resultMessage = 'Obtendo dados e imprimindo fatura #22680...';
       _isSuccess = false;
     });
     
@@ -39,32 +39,16 @@ class _VendusPrintTestPageState extends State<VendusPrintTestPage> {
       // 1. Usar a rota correta para o servidor (com /api/app/ no caminho)
       const orderId = 22680;
       
-      // 2. Obter dados de impressão usando o PrintService
-      final result = await PrintService.printOrderReceipt(orderId);
+      // 2. Usar método simplificado do PrintService (só uma chamada!)
+      final printResult = await PrintService.printOrderReceipt(orderId);
       
-      if (result['success'] != true) {
-        throw Exception('Erro: ${result['message']}');
-      }
-      
-      // 3. Dados obtidos com sucesso
-      setState(() {
-        _isSuccess = true;
-        _resultMessage = 'Dados de impressão obtidos com sucesso!\n'
-            'Fatura: ${result['invoice_number'] ?? ''}\n'
-            'Data: ${result['invoice_date'] ?? ''}\n'
-            'Tamanho dos dados: ${result['data_size'] ?? 0} bytes';
-      });
-      
-      // 4. Processar os dados para impressão
-      final base64Data = result['print_data_base64'];
-      if (base64Data != null && base64Data.isNotEmpty) {
-        // Converter Base64 para bytes
-        final rawEscPosData = base64Decode(base64Data);
-        
-        // Imprimir usando SDK MyPOS
-        await _printRawData(rawEscPosData);
+      if (printResult['success'] == true) {
+        setState(() {
+          _isSuccess = true;
+          _resultMessage = printResult['message'] ?? 'Impressão realizada com sucesso!';
+        });
       } else {
-        throw Exception('Dados de impressão vazios ou inválidos');
+        throw Exception(printResult['message'] ?? 'Falha na impressão');
       }
     } catch (e) {
       setState(() {
@@ -286,52 +270,7 @@ class _VendusPrintTestPageState extends State<VendusPrintTestPage> {
     }
   }
 
-  Future<void> _printRawData(List<int> rawData) async {
-    try {
-      setState(() {
-        _resultMessage += '\n\nEnviando dados para a impressora...';
-      });
-      
-      // Em vez de tentar usar os dados ESC/POS diretamente, vamos criar um recibo simples
-      // usando o MyPosPaper que sabemos que funciona
-      
-      final paper = MyPosPaper();
-      
-      // Criar um recibo simples
-      paper.addText("================================", alignment: PrinterAlignment.center);
-      paper.addText("FATURA VENDUS", fontSize: 32, alignment: PrinterAlignment.center);
-      paper.addText("================================", alignment: PrinterAlignment.center);
-      paper.addSpace(1);
-      paper.addText("Dados ESC/POS recebidos: ${rawData.length} bytes", alignment: PrinterAlignment.center);
-      paper.addSpace(1);
-      paper.addText("Fatura #22680", alignment: PrinterAlignment.center);
-      paper.addSpace(1);
-      paper.addText("THE BLUE HUB", alignment: PrinterAlignment.center);
-      paper.addText("Recibo de Pagamento", alignment: PrinterAlignment.center);
-      paper.addSpace(1);
-      paper.addText("Obrigado pela preferência!", alignment: PrinterAlignment.center);
-      paper.addSpace(1);
-      paper.addText("================================", alignment: PrinterAlignment.center);
-      paper.addCutLine();
-      
-      // Enviar para impressão
-      final printResult = await MyPos.printPaper(paper);
-      
-      // Verificar resultado
-      if (printResult == PrintResponse.success) {
-        setState(() {
-          _resultMessage += '\n\nImpressão concluída com sucesso!';
-          _resultMessage += '\nDados ESC/POS (${rawData.length} bytes) processados.';
-        });
-      } else {
-        throw Exception('Falha na impressão: $printResult');
-      }
-    } catch (e) {
-      setState(() {
-        _resultMessage += '\n\nErro ao processar impressão: $e';
-      });
-    }
-  }
+  // Método removido - agora usa PrintService.printOrderReceipt diretamente
   
   // Funções auxiliares para o recibo Vendus
   Future<String> _getVendusJsonData() async {

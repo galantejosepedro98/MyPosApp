@@ -7,14 +7,16 @@ import 'package:my_pos/enums/py_pos_payment_response.dart';
 import '../services/pos2_cart_service.dart';
 import '../services/pos2_debug_helper.dart';
 import '../services/pos2_permission_helper.dart';
-import '../services/pos2_printer_service.dart';
+import '../services/print_service.dart';
 import '../widgets/pos2_loading_overlay.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
 /// Tela de checkout para o sistema POS2
 /// Implementada de acordo com o design do website
 class POS2CheckoutView extends StatefulWidget {
-  const POS2CheckoutView({super.key});
+  final VoidCallback? onRefresh;
+  
+  const POS2CheckoutView({super.key, this.onRefresh});
 
   @override
   State<POS2CheckoutView> createState() => _POS2CheckoutViewState();
@@ -346,20 +348,56 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
               
               // Botão para imprimir fatura
               OutlinedButton.icon(
-                onPressed: () {
-                  // Obtém os dados da fatura do resultado da API
-                  final String? invoiceId = result['invoice_id']?.toString();
-                  final String? invoiceUrl = result['invoice_url']?.toString();
+                onPressed: () async {
+                  // Obtém o ID da ORDER (não invoice_id!) do resultado da API 
+                  String? orderIdStr;
+                  
+                  // Tentar result['data']['order']['id'] primeiro (ID da order na nossa BD)
+                  if (result['data'] != null && result['data']['order'] != null) {
+                    orderIdStr = result['data']['order']['id']?.toString();
+                  }
+                  
+                  // Fallback para result['order_id'] ou result['id']
+                  if (orderIdStr == null || orderIdStr.isEmpty) {
+                    orderIdStr = result['order_id']?.toString() ?? result['id']?.toString();
+                  }
+                  
+                  final int? orderId = int.tryParse(orderIdStr ?? '');
                   
                   // Fecha o diálogo
                   Navigator.of(context).pop();
                   
-                  // Chama o serviço de impressão se os dados estiverem disponíveis
-                  if (invoiceId != null && invoiceUrl != null) {
-                    POS2PrinterService.printInvoice(context, invoiceId, invoiceUrl);
+                  // IMPORTANTE: Reset do estado de loading
+                  setState(() {
+                    _isLoading = false;
+                  });
+                  
+                  // Voltar ao dashboard
+                  Navigator.of(context).pop();
+                  
+                  // Executar refresh do dashboard (limpa carrinho + recarrega)
+                  if (widget.onRefresh != null) {
+                    widget.onRefresh!();
+                  }
+                  
+                  // Chama o novo serviço de impressão Vendus se o ID da ORDER estiver disponível
+                  if (orderId != null) {
+                    final printResult = await PrintService.printOrderReceipt(orderId);
+                    
+                    if (printResult['success'] == true) {
+                      Fluttertoast.showToast(
+                        msg: printResult['message'] ?? "Fatura impressa com sucesso!",
+                        backgroundColor: Colors.green,
+                      );
+                    } else {
+                      Fluttertoast.showToast(
+                        msg: printResult['message'] ?? "Erro ao imprimir fatura",
+                        backgroundColor: Colors.red,
+                      );
+                    }
                   } else {
                     Fluttertoast.showToast(
-                      msg: "Dados da fatura não disponíveis para impressão",
+                      msg: "ID da order não disponível para impressão",
                       backgroundColor: Colors.red,
                     );
                   }
@@ -374,8 +412,19 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop(); // Fecha o diálogo
-              // Retorna à tela anterior
+              
+              // Reset do estado de loading
+              setState(() {
+                _isLoading = false;
+              });
+              
+              // Voltar ao dashboard
               Navigator.of(context).pop();
+              
+              // Executar refresh do dashboard (limpa carrinho + recarrega)
+              if (widget.onRefresh != null) {
+                widget.onRefresh!();
+              }
             },
             child: const Text('CONCLUIR'),
           ),
