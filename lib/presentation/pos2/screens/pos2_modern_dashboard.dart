@@ -920,9 +920,9 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF667eea),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF667eea),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 child: Row(
                   children: [
@@ -1104,6 +1104,15 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.print, color: Color(0xFF4CAF50)),
+                title: const Text('Teste de Impressão Vendus'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Navegar para a tela de teste de impressão
+                  Navigator.pushNamed(context, '/test_vendus_printing');
                 },
               ),
               ListTile(

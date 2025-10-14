@@ -541,5 +541,66 @@ class POS2ApiService {
     }
   }
   
+  /// Obter dados de impressão para um pedido específico (Vendus)
+  /// Esta função usa a rota correta /api/pos2/vendus/print/{orderId}
+  static Future<Map<String, dynamic>> getReceiptPrintData(int orderId) async {
+    try {
+      POS2DebugHelper.log('Obtendo dados de impressão para pedido #$orderId');
+      
+      // Usar a URL correta para impressão (baseada no orderId)
+      // A URL correta para o servidor é com /api/app/ no caminho
+      final url = 'https://events.essenciacompany.com/api/app/pos2/vendus/print/$orderId';
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: await headers,
+      );
 
+      POS2DebugHelper.logApi('vendus/print/$orderId', response.statusCode, 
+          body: response.body.length > 1000 
+              ? '${response.body.substring(0, 500)}... [truncado]' 
+              : response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        if (data['success'] == true && data['data'] != null) {
+          // Log para debug da estrutura dos dados retornados
+          POS2DebugHelper.log('Dados recebidos da API: ${jsonEncode(data['data'])}');
+          
+          final printData = data['data']['print_data_base64'];
+          if (printData == null || printData.isEmpty) {
+            POS2DebugHelper.logError('Dados de impressão vazios na resposta da API');
+          } else {
+            POS2DebugHelper.log('Dados de impressão recebidos: ${printData.length} caracteres');
+          }
+          
+          return {
+            'success': true,
+            'data': data['data'],
+            'print_data_base64': data['data']['print_data_base64'],
+            'invoice_number': data['data']['invoice_number'],
+            'invoice_date': data['data']['invoice_date'],
+          };
+        } else {
+          return {
+            'success': false,
+            'message': data['message'] ?? 'Dados de impressão não encontrados',
+          };
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao obter dados de impressão',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao obter dados de impressão', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
 }

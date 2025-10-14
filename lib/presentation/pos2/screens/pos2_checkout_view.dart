@@ -7,6 +7,7 @@ import 'package:my_pos/enums/py_pos_payment_response.dart';
 import '../services/pos2_cart_service.dart';
 import '../services/pos2_debug_helper.dart';
 import '../services/pos2_permission_helper.dart';
+import '../services/pos2_printer_service.dart';
 import '../widgets/pos2_loading_overlay.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
@@ -346,8 +347,22 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
               // Botão para imprimir fatura
               OutlinedButton.icon(
                 onPressed: () {
-                  // TODO: Implementar impressão da fatura
-                  Navigator.of(context).pop(); // Fecha o diálogo
+                  // Obtém os dados da fatura do resultado da API
+                  final String? invoiceId = result['invoice_id']?.toString();
+                  final String? invoiceUrl = result['invoice_url']?.toString();
+                  
+                  // Fecha o diálogo
+                  Navigator.of(context).pop();
+                  
+                  // Chama o serviço de impressão se os dados estiverem disponíveis
+                  if (invoiceId != null && invoiceUrl != null) {
+                    POS2PrinterService.printInvoice(context, invoiceId, invoiceUrl);
+                  } else {
+                    Fluttertoast.showToast(
+                      msg: "Dados da fatura não disponíveis para impressão",
+                      backgroundColor: Colors.red,
+                    );
+                  }
                 },
                 icon: const Icon(Icons.print),
                 label: const Text('Imprimir Fatura'),
