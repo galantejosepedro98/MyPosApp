@@ -1127,27 +1127,19 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                       });
                     }),
                 ),
-                Expanded(
-                  child: _buildDeliveryOption('qr', 'QR Físico', Icons.qr_code,
-                    _physicalQr, 
-                    (value) {
-                      setState(() {
-                        // Se tem produtos, comportamento normal (radio button)
-                        if (_cartService.hasProducts) {
+                // QR Físico: OCULTO se tiver apenas extras
+                if (_cartService.hasProducts)
+                  Expanded(
+                    child: _buildDeliveryOption('qr', 'QR Físico', Icons.qr_code,
+                      _physicalQr, 
+                      (value) {
+                        setState(() {
                           _physicalQr = value;
                           if (value) {
                             _sendToMail = false;
                             _sendToPhone = false;
                           }
-                        } else {
-                          // Se tem apenas extras, pode desmarcar (toggle)
-                          _physicalQr = value;
-                          if (value) {
-                            _sendToMail = false;
-                            _sendToPhone = false;
-                          }
-                        }
-                        _updateButtonState();
+                          _updateButtonState();
                       });
                     }),
                 ),

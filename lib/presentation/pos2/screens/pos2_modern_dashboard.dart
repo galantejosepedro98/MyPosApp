@@ -1038,15 +1038,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
                     _syncCartWithUI();
                     // Fechar o diálogo do scanner
                     Navigator.pop(context);
-                    // Mostrar feedback
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('$itemName adicionado ao carrinho'),
-                        backgroundColor: Colors.green,
-                        behavior: SnackBarBehavior.floating,
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
+                    // Notificação removida para simplificar UX
                   },
                 ),
               ),

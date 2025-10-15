@@ -172,8 +172,8 @@ class _UniversalScannerState extends State<UniversalScanner> {
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
-        // Voltar a focar o campo de entrada após processar
-        _scanFocusNode.requestFocus();
+        // NÃO focar o campo de entrada para evitar abrir o teclado
+        // _scanFocusNode.requestFocus();
       }
     }
   }
@@ -268,15 +268,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
         widget.onAddToCart!(extra);
       }
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Extra "${extra['name']}" adicionado ao carrinho'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      // Notificação removida para simplificar UX
     }
   }
   
