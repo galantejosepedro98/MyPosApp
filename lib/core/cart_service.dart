@@ -9,10 +9,15 @@ class CartService {
   double totalPrice = 0.00;
   updateCart() {
     try {
-      totalItems = items.length;
+      // Contar totalItems como soma das quantities (não apenas items.length)
+      totalItems = 0;
       totalPrice = 0;
       
       for (var element in items) {
+        // Somar a quantidade de cada item
+        int quantity = element['quantity'] as int? ?? 1;
+        totalItems += quantity;
+        
         double itemTotal = 0.0;
         try {
           itemTotal = element['itemTotal'] as double? ?? 0.0;
@@ -20,7 +25,6 @@ class CartService {
           print("Error converting itemTotal to double: $e");
           // Try to recalculate based on price and quantity
           double price = element['price'] as double? ?? 0.0;
-          int quantity = element['quantity'] as int? ?? 0;
           itemTotal = price * quantity;
           // Update the element with the corrected value
           element['itemTotal'] = itemTotal;
@@ -31,14 +35,14 @@ class CartService {
       
       // Round to 2 decimal places to avoid floating point issues
       totalPrice = double.parse(totalPrice.toStringAsFixed(2));
-      print("CartService: Cart updated - $totalItems items, total price: €$totalPrice");
+      print("CartService: Cart updated - $totalItems items (sum of quantities), total price: €$totalPrice");
     } catch (e) {
       print("CartService ERROR in updateCart: $e");
     }
   }
-  bool addItem(Map<String, dynamic> item) {
+  bool addItem(Map<String, dynamic> item, {int quantityToAdd = 1}) {
     try {
-      print("CartService: Adding item with ID: ${item['id']}");
+      print("CartService: Adding item with ID: ${item['id']}, quantity to add: $quantityToAdd");
       if (!item.containsKey('id')) {
         print("CartService: Item lacks 'id', can't add");
         return false;
@@ -50,19 +54,21 @@ class CartService {
         final double itemPrice = (item['price'] is double) 
             ? item['price'] 
             : double.tryParse(item['price'].toString()) ?? 0.0;
+        
+        final int initialQuantity = item['quantity'] as int? ?? quantityToAdd;
             
         final newItem = {
           'id': item['id'],
-          'quantity': 1,
+          'quantity': initialQuantity,
           'item': item,
           'price': itemPrice,
-          'itemTotal': itemPrice
+          'itemTotal': itemPrice * initialQuantity
         };
-        print("CartService: Adding new item: ${item['name']}, price: $itemPrice");
+        print("CartService: Adding new item: ${item['name']}, price: $itemPrice, quantity: $initialQuantity");
         items.add(newItem);
       } else {
         // Existing item, update quantity
-        int newQty = (items[exists]['quantity'] as int? ?? 0) + 1;
+        int newQty = (items[exists]['quantity'] as int? ?? 0) + quantityToAdd;
         double price = (items[exists]['price'] as double? ?? 0.0);
         double newPrice = newQty * price;
         items[exists]['quantity'] = newQty;

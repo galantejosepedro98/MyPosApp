@@ -69,13 +69,21 @@ class POS2CartService {
   }
 
   /// Adicionar extra ao carrinho
-  bool addExtra(Map<String, dynamic> extra, {String? ticketCode, int? ticketId, int? eventId}) {
+  bool addExtra(Map<String, dynamic> extra, {String? ticketCode, int? ticketId, int? eventId, int quantity = 1}) {
     try {
+      // IMPORTANTE: Usar ID composto para distinguir extras standalone de extras de bilhetes
+      // - Extra standalone: 'extra_6'
+      // - Extra de bilhete: 'extra_6_ticket_55647'
+      // Isso permite que o CartService trate como items separados
+      final String itemId = ticketId != null 
+          ? 'extra_${extra['id']}_ticket_$ticketId'
+          : 'extra_${extra['id']}';
+      
       final extraItem = {
-        'id': 'extra_${extra['id']}',
+        'id': itemId,
         'name': extra['name'] ?? 'Extra',
         'price': _parsePrice(extra['price']),
-        'quantity': 1,
+        'quantity': quantity, // Usar quantity passado como parâmetro
         'type': 'extra',
         'extra_id': extra['id'],
         'event_id': extra['event_id'] ?? eventId,
@@ -86,7 +94,7 @@ class POS2CartService {
         },
       };
 
-      return _cartService.addItem(extraItem);
+      return _cartService.addItem(extraItem, quantityToAdd: quantity);
     } catch (e) {
       POS2DebugHelper.logError('POS2CartService ERROR: Falha ao adicionar extra', error: e);
       return false;

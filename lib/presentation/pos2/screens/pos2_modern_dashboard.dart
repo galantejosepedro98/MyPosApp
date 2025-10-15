@@ -76,10 +76,14 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
     final cartService = POS2CartService.instance;
     final items = cartService.items;
     
+    POS2DebugHelper.log('_syncCartWithUI: Total items no carrinho = ${items.length}');
+    
     // Limpar quantidades atuais
     _cartQuantities.clear();
     
     // Atualizar quantidades com base nos itens do carrinho
+    // IMPORTANTE: Apenas contar extras STANDALONE (sem ticket_id)
+    // Extras associados a bilhetes via scanner não devem aparecer aqui
     for (final item in items) {
       final itemData = item['item'];
       final type = itemData['type'] as String?;
@@ -87,17 +91,28 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
       
       if (type == 'ticket' && itemData['ticket_id'] != null) {
         id = itemData['ticket_id'] as int?;
+        POS2DebugHelper.log('  Ticket: id=$id');
       } else if (type == 'extra' && itemData['extra_id'] != null) {
-        id = itemData['extra_id'] as int?;
+        // APENAS contar extras standalone (sem ticket_id associado)
+        final hasTicketId = itemData['ticket_id'] != null;
+        if (!hasTicketId) {
+          id = itemData['extra_id'] as int?;
+          POS2DebugHelper.log('  Extra standalone: id=$id');
+        } else {
+          POS2DebugHelper.log('  Extra de bilhete (ignorado): extra_id=${itemData['extra_id']}, ticket_id=${itemData['ticket_id']}');
+        }
       }
       
       if (id != null) {
         final quantity = item['quantity'] as int? ?? 0;
         if (quantity > 0) {
-          _cartQuantities[id] = quantity;
+          _cartQuantities[id] = (_cartQuantities[id] ?? 0) + quantity;
+          POS2DebugHelper.log('  Quantidade atualizada: id=$id, qty=${_cartQuantities[id]}');
         }
       }
     }
+    
+    POS2DebugHelper.log('_syncCartWithUI: _cartQuantities = $_cartQuantities');
     
     // Atualizar UI
     if (mounted) {
@@ -821,63 +836,88 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
   void _updateQuantity(int id, String name, int newQuantity, String type) {
     final cartService = POS2CartService.instance;
     
-    // Se a quantidade for zero, remover do carrinho
-    if (newQuantity <= 0) {
-      final itemId = type == 'ticket' ? 'ticket_$id' : 'extra_$id';
-      cartService.removeItem(itemId);
-      setState(() {
-        _cartQuantities.remove(id);
-      });
-      return;
-    }
-    
-    // Obter a quantidade atual no carrinho
+    // Obter a quantidade ATUAL de extras standalone no carrinho
     final currentQuantity = _cartQuantities[id] ?? 0;
     
-    // Se for um aumento de quantidade
-    if (newQuantity > currentQuantity) {
-      // Encontrar o item para adicionar ao carrinho
-      if (type == 'ticket') {
-        // Procurar o bilhete na lista de bilhetes
-        POS2Product? ticket;
-        try {
-          ticket = _tickets.firstWhere((t) => t.id == id);
-        } catch (e) {
-          POS2DebugHelper.logError('Bilhete não encontrado', error: e);
-          return;
+    POS2DebugHelper.log('_updateQuantity: id=$id, current=$currentQuantity, new=$newQuantity, type=$type');
+    
+    // Calcular a diferença
+    final difference = newQuantity - currentQuantity;
+    
+    if (difference == 0) return; // Nada mudou
+    
+    if (difference > 0) {
+      // ADICIONAR items
+      for (int i = 0; i < difference; i++) {
+        if (type == 'ticket') {
+          POS2Product? ticket;
+          try {
+            ticket = _tickets.firstWhere((t) => t.id == id);
+          } catch (e) {
+            POS2DebugHelper.logError('Bilhete não encontrado', error: e);
+            return;
+          }
+          
+          cartService.addTicket({
+            'id': id,
+            'product_name': ticket.name,
+            'price': ticket.price,
+            'event_id': _selectedEvent?.id,
+          });
+        } else if (type == 'extra') {
+          POS2Extra? extra;
+          try {
+            extra = _extras.firstWhere((e) => e.id == id);
+          } catch (e) {
+            POS2DebugHelper.logError('Extra não encontrado', error: e);
+            return;
+          }
+          
+          // Adicionar extra standalone (SEM ticket_id)
+          cartService.addExtra({
+            'id': id,
+            'name': extra.name,
+            'price': extra.price,
+            'event_id': _selectedEvent?.id,
+          });
+        }
+      }
+    } else {
+      // REMOVER items (difference é negativo)
+      final toRemove = -difference;
+      
+      for (int i = 0; i < toRemove; i++) {
+        // Procurar e remover APENAS extras standalone (sem ticket_id)
+        final items = List.from(cartService.items); // Cópia para iterar
+        bool removed = false;
+        
+        for (int j = items.length - 1; j >= 0; j--) {
+          final item = items[j];
+          final itemData = item['item'];
+          
+          if (type == 'ticket' && itemData['type'] == 'ticket' && itemData['ticket_id'] == id) {
+            cartService.removeItem(item['id']);
+            removed = true;
+            break;
+          } else if (type == 'extra' && 
+                     itemData['type'] == 'extra' && 
+                     itemData['extra_id'] == id && 
+                     itemData['ticket_id'] == null) { // IMPORTANTE: Só remove standalone
+            cartService.removeItem(item['id']);
+            removed = true;
+            break;
+          }
         }
         
-        // Adicionar ao carrinho
-        cartService.addTicket({
-          'id': id,
-          'product_name': ticket.name,
-          'price': ticket.price,
-          'event_id': _selectedEvent?.id,
-        });
-      } else if (type == 'extra') {
-        // Procurar o extra na lista de extras
-        POS2Extra? extra;
-        try {
-          extra = _extras.firstWhere((e) => e.id == id);
-        } catch (e) {
-          POS2DebugHelper.logError('Extra não encontrado', error: e);
-          return;
+        if (!removed) {
+          POS2DebugHelper.log('Não encontrou item para remover: type=$type, id=$id');
+          break; // Não há mais para remover
         }
-        
-        // Adicionar ao carrinho
-        cartService.addExtra({
-          'id': id,
-          'name': extra.name,
-          'price': extra.price,
-          'event_id': _selectedEvent?.id,
-        });
       }
     }
     
-    // Atualizar estado local
-    setState(() {
-      _cartQuantities[id] = newQuantity;
-    });
+    // Sincronizar UI com o estado real do carrinho
+    _syncCartWithUI();
   }
   
   // Nova barra persistente do carrinho

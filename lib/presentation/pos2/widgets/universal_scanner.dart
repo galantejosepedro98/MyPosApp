@@ -245,9 +245,155 @@ class _UniversalScannerState extends State<UniversalScanner> {
     }
   }
 
+  /// Mostrar popup para escolher quantidade de extras
+  Future<void> _showQuantityPicker(dynamic extra) async {
+    final TextEditingController customController = TextEditingController();
+
+    final result = await showDialog<int>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2D2D2D),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              title: Column(
+                children: [
+                  const Icon(Icons.add_shopping_cart, color: Colors.green, size: 40),
+                  const SizedBox(height: 12),
+                  Text(
+                    extra['name'] ?? 'Extra',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '€${(extra['price'] ?? 0).toStringAsFixed(2)} cada',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Quantidade',
+                    style: TextStyle(
+                      color: Color(0xFFB0B0B0),
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Opções rápidas: 1, 2, 3 - Clique direto fecha o popup
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [1, 2, 3].map((qty) {
+                      return SizedBox(
+                        width: 70,
+                        height: 70,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(qty),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3A3A3A),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            '$qty',
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  const Text(
+                    'ou',
+                    style: TextStyle(color: Color(0xFFB0B0B0)),
+                  ),
+                  const SizedBox(height: 10),
+                  
+                  // Campo para quantidade customizada
+                  TextField(
+                    controller: customController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(
+                      labelText: 'Quantidade customizada',
+                      labelStyle: TextStyle(color: Color(0xFFB0B0B0)),
+                      border: OutlineInputBorder(),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF3A3A3A)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Colors.green),
+                      ),
+                      hintText: 'Ex: 5, 10, etc.',
+                      hintStyle: TextStyle(color: Color(0xFF666666)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(null),
+                  child: const Text(
+                    'Cancelar',
+                    style: TextStyle(color: Color(0xFFB0B0B0)),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final qty = int.tryParse(customController.text);
+                    
+                    if (qty != null && qty > 0) {
+                      Navigator.of(context).pop(qty);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Por favor, insira uma quantidade válida'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                  ),
+                  child: const Text('Confirmar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    // Se escolheu uma quantidade, adicionar ao carrinho
+    if (result != null && result > 0) {
+      await _handleAddExtraToCart(extra, quantity: result);
+    }
+  }
+
   /// Adicionar extra ao carrinho (será associado ao bilhete no checkout)
   /// Adicionar extra ao carrinho (withdraw automático acontece no backend após pagamento)
-  Future<void> _handleAddExtraToCart(dynamic extra) async {
+  Future<void> _handleAddExtraToCart(dynamic extra, {int quantity = 1}) async {
     if (_scannedTicket == null) return;
     
     final cartService = POS2CartService.instance;
@@ -255,12 +401,13 @@ class _UniversalScannerState extends State<UniversalScanner> {
     final ticketId = _scannedTicket!['id'];
     final eventId = _scannedTicket!['event_id'];
     
-    // Adicionar ao carrinho
+    // Adicionar ao carrinho com a quantidade especificada (UMA VEZ)
     final success = cartService.addExtra(
       extra,
       ticketCode: ticketCode,
       ticketId: ticketId,
       eventId: eventId,
+      quantity: quantity, // Passar quantity para o método
     );
     
     if (success) {
@@ -991,7 +1138,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 6.0),
               child: ElevatedButton(
-                onPressed: () => _handleAddExtraToCart(extra),
+                onPressed: () => _showQuantityPicker(extra),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
