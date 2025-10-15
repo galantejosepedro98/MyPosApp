@@ -284,8 +284,9 @@ class _UniversalScannerState extends State<UniversalScanner> {
   Future<void> _handleWithdrawExtra(dynamic extra) async {
     if (_scannedTicket == null || _isProcessing) return;
     
-    final int qtyTotal = extra['qty'] ?? 0;
-    final int qtyUsed = extra['used'] ?? 0;
+    // Converter qty e used para int (backend pode enviar como String)
+    final int qtyTotal = int.tryParse(extra['qty']?.toString() ?? '0') ?? 0;
+    final int qtyUsed = int.tryParse(extra['used']?.toString() ?? '0') ?? 0;
     final int qtyAvailable = qtyTotal - qtyUsed;
     
     if (qtyAvailable <= 0) return;
@@ -845,9 +846,9 @@ class _UniversalScannerState extends State<UniversalScanner> {
           
           // Lista de extras no bilhete - Cada extra num card compacto
           ...extrasAsList.map((extra) {
-            // Converter qty para int, já que pode vir como string do backend
+            // Converter qty e used para int, já que pode vir como string do backend
             final int qty = int.tryParse(extra['qty']?.toString() ?? '0') ?? 0;
-            final int used = extra['used'] ?? 0;
+            final int used = int.tryParse(extra['used']?.toString() ?? '0') ?? 0;
             final int available = qty - used;
             final bool isAvailable = available > 0;
             
