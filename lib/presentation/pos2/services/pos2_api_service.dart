@@ -57,11 +57,16 @@ class POS2ApiService {
   }
 
   /// Buscar histórico de vendas/orders do POS2
-  static Future<Map<String, dynamic>> getOrders(String token) async {
+  static Future<Map<String, dynamic>> getOrders(String token, {int? eventId}) async {
     try {
-      // Usar o endpoint staff-orders do POS2 (orders criadas pelo POS2)
+      // Construir URL com eventId como path parameter se fornecido
+      String url = '${baseUrl}pos2/staff-orders';
+      if (eventId != null) {
+        url += '/$eventId';
+      }
+      
       final response = await http.get(
-        Uri.parse('${baseUrl}pos2/staff-orders'),
+        Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -792,6 +797,46 @@ class POS2ApiService {
       }
     } catch (e) {
       POS2DebugHelper.logError('Erro ao atualizar contactos', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
+
+  /// Solicitar ajuda - notifica administradores
+  static Future<Map<String, dynamic>> requestHelp(String token, {int? eventId}) async {
+    try {
+      final body = <String, dynamic>{};
+      if (eventId != null) body['event_id'] = eventId;
+
+      final response = await http.post(
+        Uri.parse('${baseUrl}pos2/help-request'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      POS2DebugHelper.logApi('pos2/help-request', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Pedido de ajuda enviado com sucesso',
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao enviar pedido de ajuda',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao solicitar ajuda', error: e);
       return {
         'success': false,
         'message': 'Erro de conexão: $e',

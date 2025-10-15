@@ -383,11 +383,11 @@ class _UniversalScannerState extends State<UniversalScanner> {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(8.0),
         boxShadow: const [
           BoxShadow(
-            color: Colors.black12,
+            color: Colors.black26,
             blurRadius: 5.0,
             offset: Offset(0, 2),
           ),
@@ -419,14 +419,26 @@ class _UniversalScannerState extends State<UniversalScanner> {
             child: TextField(
               controller: _scanController,
               focusNode: _scanFocusNode,
+              style: const TextStyle(fontSize: 16.0, color: Colors.white),
               decoration: InputDecoration(
                 hintText: 'Insira ou digitalize o código QR',
+                hintStyle: const TextStyle(color: Color(0xFFB0B0B0)),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(4.0),
+                  borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4.0),
+                  borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4.0),
+                  borderSide: const BorderSide(color: Color(0xFF667eea)),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                filled: true,
+                fillColor: const Color(0xFF2D2D2D),
               ),
-              style: const TextStyle(fontSize: 16.0),
               onSubmitted: (_) => _handleScanSubmit(),
               onChanged: (value) {
                 // Limpar resultado anterior quando começar a digitar novo código
@@ -446,7 +458,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
           IconButton(
             onPressed: _isProcessing ? null : _openMyPosScanner,
             icon: const Icon(Icons.qr_code_scanner),
-            color: Theme.of(context).primaryColor,
+            color: const Color(0xFF667eea),
             iconSize: 28.0,
             tooltip: 'Abrir Scanner MyPOS',
             padding: const EdgeInsets.all(12.0),
@@ -455,7 +467,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
               minHeight: 48.0,
             ),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.grey[200],
+              backgroundColor: const Color(0xFF2D2D2D),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4.0),
               ),
@@ -486,8 +498,8 @@ class _UniversalScannerState extends State<UniversalScanner> {
               minHeight: 48.0,
             ),
             style: IconButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
-              disabledBackgroundColor: Colors.grey[300],
+              backgroundColor: const Color(0xFF667eea),
+              disabledBackgroundColor: const Color(0xFF3A3A3A),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4.0),
               ),
@@ -513,8 +525,8 @@ class _UniversalScannerState extends State<UniversalScanner> {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        border: Border.all(color: Colors.red.shade200),
+        color: Colors.red.withValues(alpha: 0.1),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(4.0),
       ),
       child: Row(
@@ -524,7 +536,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
           Expanded(
             child: Text(
               _scannedTicket!['error'].toString(),
-              style: TextStyle(color: Colors.red.shade900),
+              style: const TextStyle(color: Colors.red),
             ),
           ),
           IconButton(
@@ -534,7 +546,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
               _scanFocusNode.requestFocus();
             },
             splashRadius: 24.0,
-            color: Colors.red.shade700,
+            color: Colors.red,
           ),
         ],
       ),
@@ -578,22 +590,24 @@ class _UniversalScannerState extends State<UniversalScanner> {
                     // Detalhes do bilhete
                     RichText(
                       text: TextSpan(
-                        style: DefaultTextStyle.of(context).style,
+                        style: DefaultTextStyle.of(context).style.copyWith(color: Colors.white),
                         children: [
                           const TextSpan(
                             text: 'Bilhete: ',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                           TextSpan(
                             text: _scannedTicket!['product_name'] ?? 'ID: ${_scannedTicket!['id']}',
+                            style: const TextStyle(color: Colors.white),
                           ),
-                          const TextSpan(text: ' | '),
+                          const TextSpan(text: ' | ', style: TextStyle(color: Colors.white)),
                           const TextSpan(
                             text: 'Evento: ',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                           TextSpan(
                             text: _scannedTicket!['event_name'] ?? 'N/A',
+                            style: const TextStyle(color: Colors.white),
                           ),
                         ],
                       ),
@@ -605,13 +619,13 @@ class _UniversalScannerState extends State<UniversalScanner> {
                         padding: const EdgeInsets.only(top: 8.0),
                         child: RichText(
                           text: TextSpan(
-                            style: DefaultTextStyle.of(context).style,
+                            style: DefaultTextStyle.of(context).style.copyWith(color: Colors.white),
                             children: [
                               const TextSpan(
                                 text: 'Cliente: ',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
                               ),
-                              TextSpan(text: _scannedTicket!['name']),
+                              TextSpan(text: _scannedTicket!['name'], style: const TextStyle(color: Colors.white)),
                             ],
                           ),
                         ),
@@ -638,8 +652,8 @@ class _UniversalScannerState extends State<UniversalScanner> {
                             label: Text(_showExtras ? 'Esconder Extras' : 'Adicionar Extras ao Bilhete'),
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 12.0),
-                              foregroundColor: Theme.of(context).primaryColor,
-                              side: BorderSide(color: Theme.of(context).primaryColor),
+                              foregroundColor: const Color(0xFF667eea),
+                              side: const BorderSide(color: Color(0xFF667eea)),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6.0),
                               ),
@@ -722,7 +736,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
                 style: TextStyle(
                   fontSize: 13.0,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: Colors.white,
                 ),
               ),
             ],
@@ -742,9 +756,9 @@ class _UniversalScannerState extends State<UniversalScanner> {
               margin: const EdgeInsets.only(bottom: 6.0),
               padding: const EdgeInsets.all(10.0),
               decoration: BoxDecoration(
-                color: isAvailable ? Colors.orange.shade50 : Colors.grey.shade100,
+                color: isAvailable ? Colors.orange.withValues(alpha: 0.2) : const Color(0xFF3A3A3A),
                 border: Border.all(
-                  color: isAvailable ? Colors.orange.shade200 : Colors.grey.shade300,
+                  color: isAvailable ? Colors.orange.withValues(alpha: 0.4) : const Color(0xFF3A3A3A),
                   width: 1.0,
                 ),
                 borderRadius: BorderRadius.circular(6.0),
@@ -762,7 +776,7 @@ class _UniversalScannerState extends State<UniversalScanner> {
                           style: TextStyle(
                             fontSize: 13.0,
                             fontWeight: FontWeight.w600,
-                            color: isAvailable ? Colors.black87 : Colors.grey.shade600,
+                            color: isAvailable ? Colors.white : const Color(0xFFB0B0B0),
                           ),
                         ),
                       ),
@@ -828,19 +842,19 @@ class _UniversalScannerState extends State<UniversalScanner> {
         margin: const EdgeInsets.only(top: 12.0),
         padding: const EdgeInsets.all(12.0),
         decoration: BoxDecoration(
-          color: Colors.grey.shade100,
+          color: const Color(0xFF3A3A3A),
           borderRadius: BorderRadius.circular(6.0),
         ),
-        child: Row(
+        child: const Row(
           children: [
-            Icon(Icons.info_outline, size: 16.0, color: Colors.grey.shade600),
-            const SizedBox(width: 8.0),
+            Icon(Icons.info_outline, size: 16.0, color: Color(0xFFB0B0B0)),
+            SizedBox(width: 8.0),
             Expanded(
               child: Text(
                 'Não há extras disponíveis para adicionar a este bilhete',
                 style: TextStyle(
                   fontSize: 12.0,
-                  color: Colors.grey.shade700,
+                  color: Color(0xFFB0B0B0),
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -854,24 +868,24 @@ class _UniversalScannerState extends State<UniversalScanner> {
       margin: const EdgeInsets.only(top: 12.0),
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        border: Border.all(color: Colors.green.shade200),
+        color: Colors.green.withValues(alpha: 0.1),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(6.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Cabeçalho
-          Row(
+          const Row(
             children: [
-              Icon(Icons.add_shopping_cart, size: 16.0, color: Colors.green.shade700),
-              const SizedBox(width: 6.0),
+              Icon(Icons.add_shopping_cart, size: 16.0, color: Colors.green),
+              SizedBox(width: 6.0),
               Text(
                 'Adicionar Novos Extras',
                 style: TextStyle(
                   fontSize: 13.0,
                   fontWeight: FontWeight.w600,
-                  color: Colors.green.shade900,
+                  color: Colors.white,
                 ),
               ),
             ],

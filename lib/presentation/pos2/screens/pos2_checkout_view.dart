@@ -492,11 +492,13 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
       isLoading: _isProcessing,
       message: 'Processando pagamento...',
       child: Scaffold(
+        backgroundColor: const Color(0xFF1A1A1A),
         appBar: AppBar(
-          title: const Text('Finalizar Compra'),
+          backgroundColor: const Color(0xFF2D2D2D),
+          title: const Text('Finalizar Compra', style: TextStyle(color: Colors.white)),
           centerTitle: true,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
@@ -505,9 +507,9 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
+                  CircularProgressIndicator(color: Color(0xFF667eea)),
                   SizedBox(height: 16),
-                  Text('Carregando métodos de pagamento...'),
+                  Text('Carregando métodos de pagamento...', style: TextStyle(color: Colors.white)),
                 ],
               ),
             )
@@ -583,6 +585,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
   // Resumo do pedido
   Widget _buildOrderSummary() {
     return Card(
+      color: const Color(0xFF2D2D2D),
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -675,14 +678,15 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
                 Text(
                   '€${_cartService.totalPrice.toStringAsFixed(2)}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
+                    color: Color(0xFF667eea),
                   ),
                 ),
               ],
@@ -696,6 +700,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
   // Seção de informações do cliente
   Widget _buildCustomerSection() {
     return Card(
+      color: const Color(0xFF2D2D2D),
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -704,11 +709,11 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
           children: [
             const Row(
               children: [
-                Icon(Icons.person),
+                Icon(Icons.person, color: Color(0xFF667eea)),
                 SizedBox(width: 8),
                 Text(
                   'Cliente',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ],
             ),
@@ -717,10 +722,18 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
             // Nome do cliente (obrigatório)
             TextFormField(
               controller: _customerNameController,
+              style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: 'Nome *',
-                prefixIcon: Icon(Icons.person_outline),
+                labelStyle: TextStyle(color: Color(0xFFB0B0B0)),
+                prefixIcon: Icon(Icons.person_outline, color: Color(0xFF667eea)),
                 border: OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF3A3A3A)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF667eea)),
+                ),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -737,10 +750,18 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                 children: [
                   TextFormField(
                     controller: _customerEmailController,
+                    style: const TextStyle(color: Colors.white),
                     decoration: const InputDecoration(
                       labelText: 'Email *',
-                      prefixIcon: Icon(Icons.email_outlined),
+                      labelStyle: TextStyle(color: Color(0xFFB0B0B0)),
+                      prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF667eea)),
                       border: OutlineInputBorder(),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF3A3A3A)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF667eea)),
+                      ),
                     ),
                     keyboardType: TextInputType.emailAddress,
                     validator: (value) {
@@ -765,43 +786,84 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
             if (_sendToPhone) 
               Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(4),
+                  Theme(
+                    data: ThemeData.dark().copyWith(
+                      dialogTheme: const DialogThemeData(
+                        backgroundColor: Color(0xFF2D2D2D),
+                      ),
+                      textTheme: const TextTheme(
+                        bodyLarge: TextStyle(color: Colors.white),
+                        bodyMedium: TextStyle(color: Colors.white),
+                        titleLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                      colorScheme: const ColorScheme.dark(
+                        primary: Color(0xFF667eea),
+                        surface: Color(0xFF2D2D2D),
+                        onSurface: Colors.white,
+                      ),
                     ),
-                    child: InternationalPhoneNumberInput(
-                      onInputChanged: (PhoneNumber number) {
-                        setState(() {
-                          _countryCode = number.isoCode;
-                          _dialCode = number.dialCode; // Armazenar o código de discagem
-                          // Manter apenas o número no controller, sem o código do país
-                          if (number.phoneNumber != null && number.phoneNumber!.contains(number.dialCode!)) {
-                            final phoneWithoutCode = number.phoneNumber!.substring(number.dialCode!.length);
-                            if (_customerPhoneController.text != phoneWithoutCode) {
-                              _customerPhoneController.text = phoneWithoutCode;
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFF3A3A3A)),
+                        borderRadius: BorderRadius.circular(4),
+                        color: const Color(0xFF2D2D2D),
+                      ),
+                      child: InternationalPhoneNumberInput(
+                        onInputChanged: (PhoneNumber number) {
+                          setState(() {
+                            _countryCode = number.isoCode;
+                            _dialCode = number.dialCode; // Armazenar o código de discagem
+                            // Manter apenas o número no controller, sem o código do país
+                            if (number.phoneNumber != null && number.phoneNumber!.contains(number.dialCode!)) {
+                              final phoneWithoutCode = number.phoneNumber!.substring(number.dialCode!.length);
+                              if (_customerPhoneController.text != phoneWithoutCode) {
+                                _customerPhoneController.text = phoneWithoutCode;
+                              }
                             }
-                          }
-                        });
-                      },
-                      initialValue: PhoneNumber(isoCode: _countryCode),
-                      textFieldController: _customerPhoneController,
-                      inputBorder: InputBorder.none,
-                      selectorConfig: const SelectorConfig(
-                        selectorType: PhoneInputSelectorType.DIALOG,
+                          });
+                        },
+                        initialValue: PhoneNumber(isoCode: _countryCode),
+                        textFieldController: _customerPhoneController,
+                        inputBorder: InputBorder.none,
+                        selectorConfig: const SelectorConfig(
+                          selectorType: PhoneInputSelectorType.DIALOG,
+                          setSelectorButtonAsPrefixIcon: true,
+                          leadingPadding: 10,
+                          trailingSpace: false,
+                        ),
+                        countrySelectorScrollControlled: true,
+                        locale: 'pt',
+                        selectorTextStyle: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                        searchBoxDecoration: const InputDecoration(
+                          hintText: 'Pesquisar país',
+                          hintStyle: TextStyle(color: Color(0xFFB0B0B0)),
+                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: Color(0xFF2D2D2D),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF3A3A3A)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF667eea)),
+                          ),
+                        ),
+                        inputDecoration: const InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'Número de telefone',
+                          hintStyle: TextStyle(color: Color(0xFFB0B0B0)),
+                        ),
+                        textStyle: const TextStyle(color: Colors.white),
+                        formatInput: false, // Não formatar o número digitado
+                        ignoreBlank: true, // Não validar se estiver em branco
+                        autoValidateMode: AutovalidateMode.disabled, // Desativar validação automática
+                        validator: (_) => null, // Sem validação personalizada
+                        keyboardType: TextInputType.phone,
+                        hintText: 'Número de telefone',
                       ),
-                      searchBoxDecoration: InputDecoration(
-                        hintText: 'Pesquisar país',
-                        hintStyle: TextStyle(color: Colors.grey.shade600),
-                        border: const OutlineInputBorder(),
-                      ),
-                      formatInput: false, // Não formatar o número digitado
-                      ignoreBlank: true, // Não validar se estiver em branco
-                      autoValidateMode: AutovalidateMode.disabled, // Desativar validação automática
-                      validator: (_) => null, // Sem validação personalizada
-                      keyboardType: TextInputType.phone,
-                      hintText: 'Número de telefone',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -817,7 +879,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                   style: TextStyle(
                     fontSize: 14,
                     fontStyle: FontStyle.italic,
-                    color: Colors.blue,
+                    color: Color(0xFF667eea),
                   ),
                 ),
               ),
@@ -825,10 +887,18 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
             // NIF (opcional)
             TextFormField(
               controller: _customerVatNumberController,
+              style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: 'NIF (opcional)',
-                prefixIcon: Icon(Icons.badge_outlined),
+                labelStyle: TextStyle(color: Color(0xFFB0B0B0)),
+                prefixIcon: Icon(Icons.badge_outlined, color: Color(0xFF667eea)),
                 border: OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF3A3A3A)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF667eea)),
+                ),
               ),
               keyboardType: TextInputType.number,
             ),
@@ -841,6 +911,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
   // Seção de métodos de pagamento
   Widget _buildPaymentSection() {
     return Card(
+      color: const Color(0xFF2D2D2D),
       elevation: 1,
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -850,22 +921,22 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
           children: [
             const Row(
               children: [
-                Icon(Icons.payment, size: 16),
+                Icon(Icons.payment, size: 16, color: Color(0xFF667eea)),
                 SizedBox(width: 4),
                 Text(
                   'Forma de Pagamento',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             
             // Texto de seleção
-            Text(
+            const Text(
               'Escolha uma opção:',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey.shade600,
+                color: Color(0xFFB0B0B0),
               ),
             ),
             const SizedBox(height: 6),
@@ -902,6 +973,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
   // Seção de opções adicionais
   Widget _buildOptionsSection() {
     return Card(
+      color: const Color(0xFF2D2D2D),
       elevation: 1,
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
@@ -911,22 +983,22 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
           children: [
             const Row(
               children: [
-                Icon(Icons.delivery_dining, size: 16),
+                Icon(Icons.delivery_dining, size: 16, color: Color(0xFF667eea)),
                 SizedBox(width: 4),
                 Text(
                   'Forma de Entrega',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             
             // Texto de seleção
-            Text(
+            const Text(
               'Escolha uma opção:',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey.shade600,
+                color: Color(0xFFB0B0B0),
               ),
             ),
             const SizedBox(height: 6),
@@ -988,10 +1060,10 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
         decoration: BoxDecoration(
-          color: isSelected ? Theme.of(context).primaryColor.withAlpha(26) : null,  // 0.1 aproximadamente convertido para alpha (255 * 0.1 ≈ 26)
+          color: isSelected ? const Color(0xFF667eea).withValues(alpha: 0.2) : const Color(0xFF1A1A1A),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? Theme.of(context).primaryColor : Colors.grey.shade300,
+            color: isSelected ? const Color(0xFF667eea) : const Color(0xFF3A3A3A),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -1000,7 +1072,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
           children: [
             Icon(
               icon,
-              color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+              color: isSelected ? const Color(0xFF667eea) : const Color(0xFFB0B0B0),
               size: 20,
             ),
             const SizedBox(height: 2),
@@ -1009,14 +1081,14 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? Theme.of(context).primaryColor : Colors.black87,
+                color: isSelected ? const Color(0xFF667eea) : const Color(0xFFB0B0B0),
               ),
             ),
             // Substituímos o Radio por um ícone visível apenas quando selecionado
             if (isSelected)
-              Icon(
+              const Icon(
                 Icons.check_circle,
-                color: Theme.of(context).primaryColor,
+                color: Color(0xFF667eea),
                 size: 16,
               ),
           ],
@@ -1050,6 +1122,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
       children: [
         // Resumo compacto das seleções e valor total
         Card(
+          color: const Color(0xFF2D2D2D),
           elevation: 2,
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -1058,43 +1131,43 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.receipt, color: Colors.blue, size: 18),
+                    Icon(Icons.receipt, color: Color(0xFF667eea), size: 18),
                     SizedBox(width: 6),
                     Text(
                       'Resumo do Pedido',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ],
                 ),
-                const Divider(height: 16),
+                const Divider(height: 16, color: Color(0xFF3A3A3A)),
                 // Total - formato simples
                 Text(
                   'Total: ${_cartService.totalPrice.toStringAsFixed(2)}€',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold, 
                     fontSize: 14,
-                    color: Theme.of(context).primaryColor
+                    color: Color(0xFF667eea),
                   ),
                 ),
                 const SizedBox(height: 6),
                 // Forma de Entrega
                 Row(
                   children: [
-                    const Text('Entrega:', style: TextStyle(fontSize: 14)),
+                    const Text('Entrega:', style: TextStyle(fontSize: 14, color: Color(0xFFB0B0B0))),
                     const SizedBox(width: 4),
                     Icon(
                       _sendToPhone ? Icons.sms : 
                       _sendToMail ? Icons.email : 
                       _physicalQr ? Icons.qr_code : Icons.help,
                       size: 14,
-                      color: Colors.blue,
+                      color: const Color(0xFF667eea),
                     ),
                     const SizedBox(width: 4),
                     Text(
                       _sendToPhone ? 'SMS' : 
                       _sendToMail ? 'Email' : 
                       _physicalQr ? 'QR Físico' : '',
-                      style: const TextStyle(fontSize: 14),
+                      style: const TextStyle(fontSize: 14, color: Colors.white),
                     ),
                   ],
                 ),
@@ -1102,21 +1175,21 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                 // Forma de Pagamento
                 Row(
                   children: [
-                    const Text('Pagamento:', style: TextStyle(fontSize: 14)),
+                    const Text('Pagamento:', style: TextStyle(fontSize: 14, color: Color(0xFFB0B0B0))),
                     const SizedBox(width: 4),
                     Icon(
                       _selectedPaymentMethod == 'card' ? Icons.credit_card : 
                       _selectedPaymentMethod == 'cash' ? Icons.payments : 
                       Icons.payment,
                       size: 14,
-                      color: Colors.blue,
+                      color: const Color(0xFF667eea),
                     ),
                     const SizedBox(width: 4),
                     Text(
                       _selectedPaymentMethod == 'card' ? 'Cartão' : 
                       _selectedPaymentMethod == 'cash' ? 'Dinheiro' : 
                       'Outro',
-                      style: const TextStyle(fontSize: 14),
+                      style: const TextStyle(fontSize: 14, color: Colors.white),
                     ),
                   ],
                 ),

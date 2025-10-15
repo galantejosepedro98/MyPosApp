@@ -313,14 +313,6 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
           ),
           // Adicionar botões de ação no canto superior direito
           if (_selectedEvent != null) ...[
-            // Botão de pesquisa
-            IconButton(
-              icon: const Icon(Icons.search, color: Color(0xFF667eea)),
-              onPressed: () => _showSearchDialog(),
-              tooltip: 'Pesquisar',
-              constraints: const BoxConstraints(),
-              padding: const EdgeInsets.all(8),
-            ),
             // Botão do scanner
             IconButton(
               icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF667eea)),
@@ -947,46 +939,6 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
     );
   }
 
-  // Método para mostrar o diálogo de pesquisa
-  void _showSearchDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Pesquisar Produtos'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              decoration: const InputDecoration(
-                hintText: 'Digite o nome do produto',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              autofocus: true,
-              onChanged: (value) {
-                // Implementação da pesquisa em tempo real poderia ser adicionada aqui
-              },
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Os resultados aparecerão conforme você digita',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('FECHAR'),
-          ),
-        ],
-      ),
-    );
-  }
-
   // Método para mostrar o diálogo do scanner
   void _showScannerDialog() {
     showDialog(
@@ -998,7 +950,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
           height: MediaQuery.of(context).size.height * 0.95,
           width: MediaQuery.of(context).size.width,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFF1A1A1A),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -1154,11 +1106,83 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
     }
   }
 
+  // Método para solicitar ajuda
+  Future<void> _handleHelpRequest() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      
+      if (token == null) {
+        if (!mounted) return;
+        _showError('Token não encontrado. Por favor, faça login novamente.');
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Mostrar diálogo de confirmação
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          title: const Row(
+            children: [
+              Icon(Icons.help_outline, color: Color(0xFF667eea)),
+              SizedBox(width: 8),
+              Text('Pedir Ajuda', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+          content: const Text(
+            'Um administrador será notificado de que necessita de ajuda.\n\nDeseja continuar?',
+            style: TextStyle(color: Color(0xFFB0B0B0)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('CANCELAR', style: TextStyle(color: Color(0xFFB0B0B0))),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF667eea),
+              ),
+              child: const Text('PEDIR AJUDA'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      // Enviar pedido de ajuda para a API com o event_id
+      final eventId = _selectedEvent?.id;
+      final result = await POS2ApiService.requestHelp(token, eventId: eventId);
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Pedido de ajuda enviado! Um administrador será notificado.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else {
+        _showError(result['message'] ?? 'Erro ao enviar pedido de ajuda');
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao solicitar ajuda', error: e);
+      _showError('Erro ao enviar pedido de ajuda: $e');
+    }
+  }
+
   // Método para mostrar o menu de opções
   void _showOptionsMenu() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF2D2D2D),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1170,7 +1194,7 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
             children: [
               ListTile(
                 leading: const Icon(Icons.swap_horiz, color: Color(0xFF667eea)),
-                title: const Text('Trocar Evento'),
+                title: const Text('Trocar Evento', style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
@@ -1180,37 +1204,55 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
               ),
               ListTile(
                 leading: const Icon(Icons.history, color: Color(0xFF667eea)),
-                title: const Text('Histórico de Vendas'),
+                title: const Text('Histórico de Vendas', style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
+                  
+                  // Validar se há evento selecionado
+                  if (_selectedEvent == null) {
+                    _showError('Selecione um evento primeiro');
+                    return;
+                  }
+                  
                   // Navegar para histórico de vendas
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const POS2SalesHistoryView(),
+                      builder: (context) => POS2SalesHistoryView(
+                        eventId: _selectedEvent!.id,
+                      ),
                     ),
                   );
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.help_outline, color: Color(0xFF667eea)),
+                title: const Text('Pedir Ajuda', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _handleHelpRequest();
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.logout, color: Color(0xFF667eea)),
-                title: const Text('Log out'),
+                title: const Text('Log out', style: TextStyle(color: Colors.white)),
                 onTap: () async {
                   Navigator.pop(context);
                   // Confirmar logout
                   final shouldLogout = await showDialog<bool>(
                     context: context,
                     builder: (context) => AlertDialog(
-                      title: const Text('Confirmação'),
-                      content: const Text('Tem certeza que deseja sair?'),
+                      backgroundColor: const Color(0xFF2D2D2D),
+                      title: const Text('Confirmação', style: TextStyle(color: Colors.white)),
+                      content: const Text('Tem certeza que deseja sair?', style: TextStyle(color: Color(0xFFB0B0B0))),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text('CANCELAR'),
+                          child: const Text('CANCELAR', style: TextStyle(color: Color(0xFF667eea))),
                         ),
                         TextButton(
                           onPressed: () => Navigator.of(context).pop(true),
-                          child: const Text('SAIR'),
+                          child: const Text('SAIR', style: TextStyle(color: Colors.redAccent)),
                         ),
                       ],
                     ),

@@ -4,7 +4,12 @@ import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
 
 class POS2SalesHistoryView extends StatefulWidget {
-  const POS2SalesHistoryView({super.key});
+  final int eventId;
+  
+  const POS2SalesHistoryView({
+    super.key,
+    required this.eventId,
+  });
 
   @override
   State<POS2SalesHistoryView> createState() => _POS2SalesHistoryViewState();
@@ -15,10 +20,13 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
   bool _loading = true;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  DateTime _selectedDate = DateTime.now();
+  int? _currentEventId;
 
   @override
   void initState() {
     super.initState();
+    _currentEventId = widget.eventId;
     _loadOrders();
   }
 
@@ -29,6 +37,8 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
   }
 
   Future<void> _loadOrders() async {
+    if (_currentEventId == null) return;
+    
     setState(() => _loading = true);
     
     try {
@@ -40,13 +50,23 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
         return;
       }
 
-      final result = await POS2ApiService.getOrders(token);
+      POS2DebugHelper.log('Carregando orders do evento: $_currentEventId');
+
+      final result = await POS2ApiService.getOrders(token, eventId: _currentEventId);
+      
+      POS2DebugHelper.log('Resultado da API: ${result['success']}, Orders: ${result['data']?.length ?? 0}');
       
       if (result['success']) {
         setState(() {
           _orders = result['data'] ?? [];
           _loading = false;
         });
+        
+        POS2DebugHelper.log('Total orders carregadas: ${_orders.length}');
+        if (_orders.isNotEmpty) {
+          POS2DebugHelper.log('Primeira order date: ${_orders[0]['created_at']}');
+          POS2DebugHelper.log('Data selecionada no filtro: $_selectedDate');
+        }
       } else {
         _showError(result['message'] ?? 'Erro ao carregar histórico');
         setState(() => _loading = false);
@@ -71,9 +91,37 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
   }
 
   List<dynamic> get _filteredOrders {
-    if (_searchQuery.isEmpty) return _orders;
+    var filtered = _orders;
     
-    return _orders.where((order) {
+    POS2DebugHelper.log('=== FILTRO DE DATA ===');
+    POS2DebugHelper.log('Total orders antes do filtro: ${_orders.length}');
+    POS2DebugHelper.log('Data selecionada: ${_selectedDate.year}-${_selectedDate.month}-${_selectedDate.day}');
+    
+    // Filtrar por data selecionada
+    filtered = filtered.where((order) {
+      try {
+        final orderDate = DateTime.parse(order['created_at'] ?? '');
+        final match = orderDate.year == _selectedDate.year &&
+               orderDate.month == _selectedDate.month &&
+               orderDate.day == _selectedDate.day;
+        
+        if (!match && _orders.indexOf(order) < 3) { // Log das primeiras 3 orders
+          POS2DebugHelper.log('Order ${order['id']} date: ${orderDate.year}-${orderDate.month}-${orderDate.day} - FILTRADA');
+        }
+        
+        return match;
+      } catch (e) {
+        POS2DebugHelper.log('Erro ao parsear data da order: $e');
+        return false;
+      }
+    }).toList();
+    
+    POS2DebugHelper.log('Orders após filtro de data: ${filtered.length}');
+    
+    // Filtrar por pesquisa
+    if (_searchQuery.isEmpty) return filtered;
+    
+    return filtered.where((order) {
       final query = _searchQuery.toLowerCase();
       
       // ID da ordem
@@ -149,6 +197,7 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
       body: Column(
         children: [
           _buildSearchBar(),
+          _buildDateFilter(),
           _buildOrdersList(),
         ],
       ),
@@ -190,6 +239,158 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
         },
       ),
     );
+  }
+
+  Widget _buildDateFilter() {
+    final now = DateTime.now();
+    final isToday = _selectedDate.year == now.year &&
+                    _selectedDate.month == now.month &&
+                    _selectedDate.day == now.day;
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      color: const Color(0xFF2A2A2A),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_today, color: Colors.grey.shade400, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GestureDetector(
+              onTap: _selectDate,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3A3A3A),
+                  borderRadius: BorderRadius.circular(12.0),
+                  border: Border.all(
+                    color: const Color(0xFF667eea),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _formatDateOnly(_selectedDate),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(Icons.arrow_drop_down, color: Colors.white, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Botões de navegação rápida
+          IconButton(
+            icon: const Icon(Icons.chevron_left, color: Colors.white, size: 20),
+            onPressed: _previousDay,
+            tooltip: 'Dia anterior',
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.today, 
+              color: Colors.white, 
+              size: 20,
+            ),
+            onPressed: _today,
+            tooltip: 'Hoje',
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(),
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.chevron_right, 
+              color: isToday ? Colors.grey.shade700 : Colors.white,
+              size: 20,
+            ),
+            onPressed: isToday ? null : _nextDay,
+            tooltip: isToday ? 'Já está no dia de hoje' : 'Próximo dia',
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDateOnly(DateTime date) {
+    final now = DateTime.now();
+    if (date.year == now.year && date.month == now.month && date.day == now.day) {
+      return 'Hoje';
+    }
+    
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (date.year == yesterday.year && date.month == yesterday.month && date.day == yesterday.day) {
+      return 'Ontem';
+    }
+    
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF667eea),
+              onPrimary: Colors.white,
+              surface: Color(0xFF2A2A2A),
+              onSurface: Colors.white,
+            ),
+            dialogTheme: const DialogThemeData(
+              backgroundColor: Color(0xFF2A2A2A),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    
+    if (picked != null && picked != _selectedDate) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  void _previousDay() {
+    setState(() {
+      _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+    });
+  }
+
+  void _nextDay() {
+    final now = DateTime.now();
+    final nextDay = _selectedDate.add(const Duration(days: 1));
+    
+    // Não permitir avançar além do dia de hoje
+    // Comparar apenas ano, mês e dia (ignorar horas)
+    if (nextDay.year < now.year ||
+        (nextDay.year == now.year && nextDay.month < now.month) ||
+        (nextDay.year == now.year && nextDay.month == now.month && nextDay.day <= now.day)) {
+      setState(() {
+        _selectedDate = nextDay;
+      });
+    }
+  }
+
+  void _today() {
+    setState(() {
+      _selectedDate = DateTime.now();
+    });
   }
 
   Widget _buildOrdersList() {
