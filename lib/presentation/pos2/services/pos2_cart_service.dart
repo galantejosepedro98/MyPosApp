@@ -136,6 +136,38 @@ class POS2CartService {
   /// Obter o preço total do carrinho
   double get totalPrice => _cartService.totalPrice;
 
+  /// Verificar se o carrinho tem produtos (bilhetes/tickets)
+  /// Retorna true se há bilhetes, false se há apenas extras
+  bool get hasProducts {
+    final result = _cartService.items.any((item) {
+      // O CartService guarda o item dentro de item['item']
+      final innerItem = item['item'] as Map<String, dynamic>?;
+      final type = innerItem?['type'];
+      return type == 'ticket' || type == 'paid_invite_activation';
+    });
+    POS2DebugHelper.log('hasProducts check: $result');
+    if (_cartService.items.isNotEmpty) {
+      POS2DebugHelper.log('Itens no carrinho: ${_cartService.items.map((e) {
+        final inner = e['item'] as Map<String, dynamic>?;
+        return '${e['id']}: ${inner?['type']}';
+      }).join(', ')}');
+    }
+    return result;
+  }
+
+  /// Verificar se o carrinho tem apenas extras (sem produtos)
+  bool get hasOnlyExtras {
+    final hasProds = hasProducts;
+    final hasExtras = _cartService.items.any((item) {
+      // O CartService guarda o item dentro de item['item']
+      final innerItem = item['item'] as Map<String, dynamic>?;
+      return innerItem?['type'] == 'extra';
+    });
+    final result = !hasProds && hasExtras;
+    POS2DebugHelper.log('hasOnlyExtras - hasProducts: $hasProds, hasExtras: $hasExtras, result: $result');
+    return result;
+  }
+
   /// Processar checkout
   Future<Map<String, dynamic>> checkout({
     required String paymentMethod,

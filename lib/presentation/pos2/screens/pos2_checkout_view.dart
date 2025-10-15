@@ -89,8 +89,11 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
       bool emailValid = !_sendToMail || (_sendToMail && _customerEmailController.text.trim().isNotEmpty);
       bool phoneValid = !_sendToPhone || (_sendToPhone && _customerPhoneController.text.trim().isNotEmpty);
       
+      // Se tem apenas extras, não precisa de método de entrega obrigatório
+      bool deliveryMethodValid = _cartService.hasOnlyExtras || _sendToPhone || _sendToMail || _physicalQr;
+      
       setState(() {
-        _isButtonEnabled = nameValid && emailValid && phoneValid;
+        _isButtonEnabled = nameValid && emailValid && phoneValid && deliveryMethodValid;
       });
     }
   }
@@ -330,11 +333,22 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
         title: const Row(
           children: [
-            Icon(Icons.check_circle, color: Colors.green),
-            SizedBox(width: 10),
-            Text('Pagamento Concluído'),
+            Icon(Icons.check_circle, color: Colors.green, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Pagamento Concluído',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: SingleChildScrollView(
@@ -344,28 +358,74 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
             children: [
               const Text(
                 'O pagamento foi processado com sucesso!',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 16),
               
               // Detalhes do pedido
-              const Text('Detalhes do Pedido:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'Detalhes do Pedido:', 
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
               const SizedBox(height: 8),
               // Tentar obter número da order de várias fontes possíveis
-              Text('Número: #${_getOrderNumber(result)}'),
-              Text('Total: €${_getOrderTotal(result)}'),
+              Text(
+                'Número: #${_getOrderNumber(result)}',
+                style: const TextStyle(color: Colors.white),
+              ),
+              Text(
+                'Total: €${_getOrderTotal(result)}',
+                style: const TextStyle(color: Colors.white),
+              ),
               const SizedBox(height: 16),
               
               // Ações disponíveis
-              const Text('Ações disponíveis:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'Ações disponíveis:', 
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
               const SizedBox(height: 8),
               
               // Botão para imprimir fatura
               OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF667eea)),
+                ),
                 onPressed: () async {
                   // Capturar context antes de operações assíncronas
                   final navigatorContext = context;
                   
+                  // FECHAR O POPUP IMEDIATAMENTE
+                  Navigator.of(navigatorContext).pop();
+                  
+                  // DESATIVAR LOADING E FECHAR CHECKOUT
+                  setState(() {
+                    _isLoading = false;
+                  });
+                  
+                  // Verificar se precisa processar QR Físico
+                  if (ticketIds != null && ticketIds.isNotEmpty) {
+                    // Tem QR Físico: Navegar para a tela de QR
+                    _navigateToPhysicalQr(ticketIds);
+                  } else {
+                    // Não tem QR Físico: Voltar ao dashboard
+                    Navigator.of(navigatorContext).pop();
+                    if (widget.onRefresh != null) {
+                      widget.onRefresh!();
+                    }
+                  }
+                  
+                  // FAZER IMPRESSÃO EM BACKGROUND
                   // Obtém o ID da ORDER (não invoice_id!) do resultado da API 
                   String? orderIdStr;
                   
@@ -402,29 +462,6 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                       backgroundColor: Colors.red,
                     );
                   }
-                  
-                  // Verificar se ainda está montado após operações async
-                  if (!mounted) return;
-                  
-                  // Fecha o diálogo
-                  // ignore: use_build_context_synchronously
-                  Navigator.of(navigatorContext).pop();
-                  
-                  // Verificar se precisa processar QR Físico
-                  if (ticketIds != null && ticketIds.isNotEmpty) {
-                    // Tem QR Físico: Navegar para a tela de QR sem fechar checkout
-                    _navigateToPhysicalQr(ticketIds);
-                  } else {
-                    // Não tem QR Físico: Voltar ao dashboard normalmente
-                    setState(() {
-                      _isLoading = false;
-                    });
-                    // ignore: use_build_context_synchronously
-                    Navigator.of(navigatorContext).pop();
-                    if (widget.onRefresh != null) {
-                      widget.onRefresh!();
-                    }
-                  }
                 },
                 icon: const Icon(Icons.print),
                 label: const Text('Imprimir Fatura'),
@@ -434,6 +471,9 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
         ),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF667eea),
+            ),
             onPressed: () {
               Navigator.of(context).pop(); // Fecha o diálogo
               
@@ -993,10 +1033,43 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
             ),
             const SizedBox(height: 8),
             
+            // Mensagem informativa para extras
+            if (_cartService.hasOnlyExtras)
+              Container(
+                padding: const EdgeInsets.all(8),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF667eea).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF667eea).withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Color(0xFF667eea), size: 16),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Apenas extras: método de entrega opcional',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF667eea),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
             // Texto de seleção
-            const Text(
-              'Escolha uma opção:',
-              style: TextStyle(
+            Text(
+              _cartService.hasOnlyExtras 
+                ? 'Escolha uma opção (opcional):' 
+                : 'Escolha uma opção:',
+              style: const TextStyle(
                 fontSize: 12,
                 color: Color(0xFFB0B0B0),
               ),
@@ -1011,11 +1084,22 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                     _sendToPhone, 
                     (value) {
                       setState(() {
-                        _sendToPhone = value;
-                        if (value) {
-                          _sendToMail = false;
-                          _physicalQr = false;
+                        // Se tem produtos, comportamento normal (radio button)
+                        if (_cartService.hasProducts) {
+                          _sendToPhone = value;
+                          if (value) {
+                            _sendToMail = false;
+                            _physicalQr = false;
+                          }
+                        } else {
+                          // Se tem apenas extras, pode desmarcar (toggle)
+                          _sendToPhone = value;
+                          if (value) {
+                            _sendToMail = false;
+                            _physicalQr = false;
+                          }
                         }
+                        _updateButtonState();
                       });
                     }),
                 ),
@@ -1024,11 +1108,22 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                     _sendToMail, 
                     (value) {
                       setState(() {
-                        _sendToMail = value;
-                        if (value) {
-                          _sendToPhone = false;
-                          _physicalQr = false;
+                        // Se tem produtos, comportamento normal (radio button)
+                        if (_cartService.hasProducts) {
+                          _sendToMail = value;
+                          if (value) {
+                            _sendToPhone = false;
+                            _physicalQr = false;
+                          }
+                        } else {
+                          // Se tem apenas extras, pode desmarcar (toggle)
+                          _sendToMail = value;
+                          if (value) {
+                            _sendToPhone = false;
+                            _physicalQr = false;
+                          }
                         }
+                        _updateButtonState();
                       });
                     }),
                 ),
@@ -1037,11 +1132,22 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                     _physicalQr, 
                     (value) {
                       setState(() {
-                        _physicalQr = value;
-                        if (value) {
-                          _sendToMail = false;
-                          _sendToPhone = false;
+                        // Se tem produtos, comportamento normal (radio button)
+                        if (_cartService.hasProducts) {
+                          _physicalQr = value;
+                          if (value) {
+                            _sendToMail = false;
+                            _sendToPhone = false;
+                          }
+                        } else {
+                          // Se tem apenas extras, pode desmarcar (toggle)
+                          _physicalQr = value;
+                          if (value) {
+                            _sendToMail = false;
+                            _sendToPhone = false;
+                          }
                         }
+                        _updateButtonState();
                       });
                     }),
                 ),
@@ -1056,7 +1162,15 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
   // Widget para criar opção de entrega em formato de rádio
   Widget _buildDeliveryOption(String id, String label, IconData icon, bool isSelected, Function(bool) onChanged) {
     return InkWell(
-      onTap: () => onChanged(true),
+      onTap: () {
+        // Se tem produtos, comportamento de radio button (sempre marca)
+        if (_cartService.hasProducts) {
+          onChanged(true);
+        } else {
+          // Se tem apenas extras, comportamento de toggle (pode desmarcar)
+          onChanged(!isSelected);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
         decoration: BoxDecoration(
@@ -1219,8 +1333,18 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
           : () {
               if (_currentStep == 1) {
                 // Verificar se opções de entrega e pagamento foram selecionadas
-                if ((_sendToPhone || _sendToMail || _physicalQr) && 
-                    (_selectedPaymentMethod.isNotEmpty)) {
+                // Se tem apenas extras, não é obrigatório ter método de entrega
+                bool hasDeliveryMethod = _sendToPhone || _sendToMail || _physicalQr;
+                bool deliveryValid = _cartService.hasOnlyExtras || hasDeliveryMethod;
+                
+                POS2DebugHelper.log('=== VALIDAÇÃO CHECKOUT ===');
+                POS2DebugHelper.log('hasOnlyExtras: ${_cartService.hasOnlyExtras}');
+                POS2DebugHelper.log('hasProducts: ${_cartService.hasProducts}');
+                POS2DebugHelper.log('hasDeliveryMethod: $hasDeliveryMethod');
+                POS2DebugHelper.log('deliveryValid: $deliveryValid');
+                POS2DebugHelper.log('paymentMethod: $_selectedPaymentMethod');
+                
+                if (deliveryValid && _selectedPaymentMethod.isNotEmpty) {
                   setState(() {
                     _currentStep = 2;
                     _errorMessage = null;
@@ -1229,8 +1353,20 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
                   });
                 } else {
                   // Mostrar mensagem de erro se alguma opção não foi selecionada
+                  String errorMsg = 'Por favor, selecione ';
+                  if (!deliveryValid) {
+                    errorMsg += 'uma forma de entrega';
+                  }
+                  if (_selectedPaymentMethod.isEmpty) {
+                    if (!deliveryValid) errorMsg += ' e ';
+                    errorMsg += 'uma forma de pagamento';
+                  }
+                  errorMsg += '.';
+                  
+                  POS2DebugHelper.log('ERRO: $errorMsg');
+                  
                   setState(() {
-                    _errorMessage = 'Por favor, selecione uma forma de entrega e uma forma de pagamento.';
+                    _errorMessage = errorMsg;
                   });
                 }
               } else {

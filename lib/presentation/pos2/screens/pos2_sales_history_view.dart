@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
+import '../services/print_service.dart';
 
 class POS2SalesHistoryView extends StatefulWidget {
   final int eventId;
@@ -484,7 +485,11 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
     final isMarked = order['alert'] == 'marked';
     
     // Verificar se é bilhete físico (QR Code físico)
-    final isPhysicalTicket = !sendMessage && !sendEmail;
+    // Só é bilhete físico se: não tem SMS/Email E tem tickets reais (não apenas extras)
+    final hasTickets = order['tickets'] != null && 
+                       order['tickets'] is List && 
+                       (order['tickets'] as List).isNotEmpty;
+    final isPhysicalTicket = !sendMessage && !sendEmail && hasTickets;
     
     // Determinar qual contato mostrar baseado nas flags de envio
     String contactInfo = '';
@@ -1005,6 +1010,51 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
     );
   }
 
+  // Widget para cada opção do grid
+  Widget _buildGridOption({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1F1F1F),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: color.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: color,
+              size: 28,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showOrderOptions(Map<String, dynamic> order) {
     showModalBottomSheet(
       context: context,
@@ -1013,113 +1063,100 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return SingleChildScrollView(
-          child: Container(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                'Opções do Pedido #${order['id']}',
+        return Container(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Título
+              Text(
+                'Pedido #${order['id']}',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               
-              const SizedBox(height: 24),
-              
-              // Atualizar Dados
-              ListTile(
-                leading: const Icon(Icons.edit, color: Color(0xFF2196F3)),
-                title: const Text(
-                  'Atualizar Dados',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
-                subtitle: const Text(
-                  'Editar email ou telefone do cliente',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _handleUpdateContact(order);
-                },
-              ),
-              
-              const Divider(color: Colors.grey),
-              
-              // Reenviar Email
-              ListTile(
-                leading: const Icon(Icons.email, color: Color(0xFF667eea)),
-                title: const Text(
-                  'Reenviar Email',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
-                subtitle: const Text(
-                  'Enviar bilhetes por email novamente',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _handleResendEmail(order);
-                },
-              ),
-              
-              const Divider(color: Colors.grey),
-              
-              // Reenviar SMS
-              ListTile(
-                leading: const Icon(Icons.sms, color: Color(0xFF4CAF50)),
-                title: const Text(
-                  'Reenviar SMS',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
-                subtitle: const Text(
-                  'Enviar bilhetes por SMS novamente',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _handleResendSMS(order);
-                },
-              ),
-              
-              const Divider(color: Colors.grey),
-              
-              // Sinalizar Problema
-              ListTile(
-                leading: const Icon(Icons.flag, color: Color(0xFFFF9800)),
-                title: const Text(
-                  'Sinalizar Problema',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
-                subtitle: const Text(
-                  'Marcar esta venda com um problema',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _handleMarkProblem(order);
-                },
-              ),
-              
               const SizedBox(height: 16),
               
-              // Botão Cancelar
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancelar',
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
+              // Grid de Opções 3x2 (3 colunas)
+              GridView.count(
+                shrinkWrap: true,
+                crossAxisCount: 3,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 0.95,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  // Atualizar Dados
+                  _buildGridOption(
+                    icon: Icons.edit,
+                    color: const Color(0xFF2196F3),
+                    label: 'Atualizar Dados',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _handleUpdateContact(order);
+                    },
                   ),
-                ),
+                  
+                  // Reenviar Email
+                  _buildGridOption(
+                    icon: Icons.email,
+                    color: const Color(0xFF667eea),
+                    label: 'Reenviar Email',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _handleResendEmail(order);
+                    },
+                  ),
+                  
+                  // Reenviar SMS
+                  _buildGridOption(
+                    icon: Icons.sms,
+                    color: const Color(0xFF4CAF50),
+                    label: 'Reenviar SMS',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _handleResendSMS(order);
+                    },
+                  ),
+                  
+                  // Imprimir Fatura
+                  _buildGridOption(
+                    icon: Icons.print,
+                    color: const Color(0xFF9C27B0),
+                    label: 'Imprimir Fatura',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _handlePrintInvoice(order);
+                    },
+                  ),
+                  
+                  // Sinalizar Problema
+                  _buildGridOption(
+                    icon: Icons.flag,
+                    color: const Color(0xFFFF9800),
+                    label: 'Sinalizar',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _handleMarkProblem(order);
+                    },
+                  ),
+                  
+                  // Cancelar
+                  _buildGridOption(
+                    icon: Icons.close,
+                    color: Colors.grey,
+                    label: 'Cancelar',
+                    onTap: () => Navigator.pop(context),
+                  ),
+                ],
               ),
+              
+              const SizedBox(height: 12),
             ],
           ),
-        ),
         );
       },
     );
@@ -1365,6 +1402,50 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
       }
     } catch (e) {
       _showError('Erro ao enviar SMS: $e');
+    }
+  }
+
+  Future<void> _handlePrintInvoice(Map<String, dynamic> order) async {
+    try {
+      final orderId = order['id'] as int?;
+      
+      if (orderId == null) {
+        _showError('ID da order não disponível');
+        return;
+      }
+
+      // Mostrar loading
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Imprimindo fatura...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Importar PrintService
+      final printResult = await PrintService.printOrderReceipt(orderId);
+      
+      if (mounted) {
+        if (printResult['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(printResult['message'] ?? 'Fatura impressa com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(printResult['message'] ?? 'Erro ao imprimir fatura'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      _showError('Erro ao imprimir fatura: $e');
     }
   }
 
