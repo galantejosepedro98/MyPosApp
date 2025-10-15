@@ -1192,15 +1192,6 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.print, color: Color(0xFF4CAF50)),
-                title: const Text('Teste de Impressão Vendus'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // Navegar para a tela de teste de impressão
-                  Navigator.pushNamed(context, '/test_vendus_printing');
-                },
-              ),
-              ListTile(
                 leading: const Icon(Icons.logout, color: Color(0xFF667eea)),
                 title: const Text('Log out'),
                 onTap: () async {

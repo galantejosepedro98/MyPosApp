@@ -9,7 +9,6 @@ import 'package:essenciacompany_mobile/presentation/view/pos/pos_shop_view.dart'
 import 'package:essenciacompany_mobile/presentation/view/staff_withdraw/staff_withdraw_view.dart';
 import 'package:essenciacompany_mobile/presentation/pos2/screens/pos2_modern_dashboard.dart';
 import 'package:essenciacompany_mobile/presentation/pos2/screens/scanner_demo_view.dart';
-import 'package:essenciacompany_mobile/presentation/pos2/tests/test_vendus_printing.dart';
 import 'package:essenciacompany_mobile/presentation/pos2/tests/api_direct_test.dart';
 import 'package:flutter/material.dart';
 
@@ -42,7 +41,6 @@ class MyApp extends StatelessWidget {
         // ROTAS POS2
         '/pos2/modern': (context) => const POS2ModernDashboard(),
         '/pos2/scanner': (context) => const ScannerDemoView(),
-        '/test_vendus_printing': (context) => const VendusPrintTestPage(),
         '/api-direct-test': (context) => const ApiDirectTestPage(),
       },
     );
