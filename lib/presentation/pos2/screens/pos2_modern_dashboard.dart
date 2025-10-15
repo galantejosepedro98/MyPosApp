@@ -7,6 +7,7 @@ import '../models/pos2_event.dart';
 import '../models/pos2_product.dart';
 import '../widgets/universal_scanner.dart';
 import 'pos2_checkout_view.dart';
+import 'pos2_sales_history_view.dart';
 
 class POS2ModernDashboard extends StatefulWidget {
   const POS2ModernDashboard({super.key});
@@ -1182,11 +1183,11 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
                 title: const Text('Histórico de Vendas'),
                 onTap: () {
                   Navigator.pop(context);
-                  // Implementar navegação para o histórico de vendas
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Funcionalidade em desenvolvimento'),
-                      behavior: SnackBarBehavior.floating,
+                  // Navegar para histórico de vendas
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const POS2SalesHistoryView(),
                     ),
                   );
                 },

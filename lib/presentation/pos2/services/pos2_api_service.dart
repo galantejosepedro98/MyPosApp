@@ -56,6 +56,43 @@ class POS2ApiService {
     }
   }
 
+  /// Buscar histórico de vendas/orders do POS2
+  static Future<Map<String, dynamic>> getOrders(String token) async {
+    try {
+      // Usar o endpoint staff-orders do POS2 (orders criadas pelo POS2)
+      final response = await http.get(
+        Uri.parse('${baseUrl}pos2/staff-orders'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      POS2DebugHelper.logApi('pos2/staff-orders', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'data': data is List ? data : (data['data'] ?? []),
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao buscar histórico',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao buscar histórico de vendas POS2', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
+
   /// Limpar o cache de dados da API
   static Future<bool> clearCache() async {
     try {
@@ -601,6 +638,160 @@ class POS2ApiService {
       }
     } catch (e) {
       POS2DebugHelper.logError('Erro ao obter dados de impressão', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
+
+  /// Sinalizar problema em uma ordem
+  static Future<Map<String, dynamic>> markOrder(String token, int orderId, String note) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${baseUrl}pos2/mark-order/$orderId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'note': note}),
+      );
+
+      POS2DebugHelper.logApi('pos2/mark-order/$orderId', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Problema sinalizado com sucesso',
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao sinalizar problema',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao sinalizar problema', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
+
+  /// Reenviar email da ordem
+  static Future<Map<String, dynamic>> resendEmail(String token, int orderId) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${baseUrl}pos2/send-email/$orderId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      POS2DebugHelper.logApi('pos2/send-email/$orderId', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Email reenviado com sucesso',
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao reenviar email',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao reenviar email', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
+
+  /// Reenviar SMS da ordem
+  static Future<Map<String, dynamic>> resendSMS(String token, int orderId) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${baseUrl}pos2/send-sms/$orderId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      POS2DebugHelper.logApi('pos2/send-sms/$orderId', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'SMS reenviado com sucesso',
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao reenviar SMS',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao reenviar SMS', error: e);
+      return {
+        'success': false,
+        'message': 'Erro de conexão: $e',
+      };
+    }
+  }
+
+  /// Atualizar dados de contato da ordem
+  static Future<Map<String, dynamic>> updateContact(
+    String token, 
+    int orderId, 
+    {String? email, String? phone}
+  ) async {
+    try {
+      final body = <String, dynamic>{};
+      if (email != null) body['email'] = email;
+      if (phone != null) body['phone'] = phone;
+
+      final response = await http.put(
+        Uri.parse('${baseUrl}pos2/update-contact/$orderId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      POS2DebugHelper.logApi('pos2/update-contact/$orderId', response.statusCode, body: response.body);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Contactos atualizados com sucesso',
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Erro ao atualizar contactos',
+        };
+      }
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao atualizar contactos', error: e);
       return {
         'success': false,
         'message': 'Erro de conexão: $e',
