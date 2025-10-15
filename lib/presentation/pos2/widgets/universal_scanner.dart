@@ -246,29 +246,37 @@ class _UniversalScannerState extends State<UniversalScanner> {
   }
 
   /// Adicionar extra ao carrinho (será associado ao bilhete no checkout)
-  void _handleAddExtraToCart(dynamic extra) {
-    if (_scannedTicket != null) {
-      final cartService = POS2CartService.instance;
-      final success = cartService.addExtra(
-        extra,
-        ticketCode: _scannedTicket!['ticket'],
-        ticketId: _scannedTicket!['id'],
-        eventId: _scannedTicket!['event_id'],
-      );
-      
-      if (success && widget.onAddToCart != null) {
+  /// Adicionar extra ao carrinho (withdraw automático acontece no backend após pagamento)
+  Future<void> _handleAddExtraToCart(dynamic extra) async {
+    if (_scannedTicket == null) return;
+    
+    final cartService = POS2CartService.instance;
+    final ticketCode = _scannedTicket!['ticket'];
+    final ticketId = _scannedTicket!['id'];
+    final eventId = _scannedTicket!['event_id'];
+    
+    // Adicionar ao carrinho
+    final success = cartService.addExtra(
+      extra,
+      ticketCode: ticketCode,
+      ticketId: ticketId,
+      eventId: eventId,
+    );
+    
+    if (success) {
+      if (widget.onAddToCart != null) {
         widget.onAddToCart!(extra);
       }
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Extra "${extra['name']}" adicionado ao carrinho'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      
-      POS2DebugHelper.log('Extra "${extra['name']}" adicionado ao carrinho');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Extra "${extra['name']}" adicionado ao carrinho'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
   
@@ -348,13 +356,42 @@ class _UniversalScannerState extends State<UniversalScanner> {
         }
         
         if (mounted) {
+          // Fechar o bilhete imediatamente
+          setState(() {
+            _scannedTicket = null;
+            _showExtras = false;
+            _availableExtras = [];
+          });
+          
+          // Mostrar mensagem de sucesso (fica visível enquanto scanner abre)
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Extra "${extra['name']}" levantado com sucesso!'),
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '${extra['name']} levantado com sucesso!',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
               backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           );
+          
+          // Aguardar um momento e então abrir o scanner MyPOS
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              _openMyPosScanner();
+            }
+          });
         }
         
         POS2DebugHelper.log('✅ Extra "${extra['name']}" levantado com sucesso!');

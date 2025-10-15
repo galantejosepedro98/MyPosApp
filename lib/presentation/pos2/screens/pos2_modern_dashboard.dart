@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
 import '../services/pos2_cart_service.dart';
+import '../services/pos2_permission_helper.dart';
 import '../models/pos2_event.dart';
 import '../models/pos2_product.dart';
 import '../widgets/universal_scanner.dart';
@@ -26,6 +27,15 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
   String _posName = 'POS 2.0';
   bool _loading = true;
   
+  // Permissions do POS
+  Map<String, bool> _permissions = {
+    'tickets': false,
+    'extras': false,
+    'scan': false,
+    'report': false,
+    'withdraw': false,
+  };
+  
   // Quantidades no carrinho (id do produto/extra -> quantidade)
   final Map<int, int> _cartQuantities = {};
   
@@ -39,12 +49,25 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
     try {
       setState(() => _loading = true);
       await _loadUserData();
+      await _loadPermissions();
       await _fetchEvents();
       _syncCartWithUI();
     } catch (e) {
       _showError('Erro ao carregar dados: $e');
     } finally {
       setState(() => _loading = false);
+    }
+  }
+  
+  /// Carregar permissions do POS atual
+  Future<void> _loadPermissions() async {
+    try {
+      final permissions = await POS2PermissionHelper.getAllPermissions();
+      setState(() {
+        _permissions = permissions;
+      });
+    } catch (e) {
+      POS2DebugHelper.logError('Erro ao carregar permissions', error: e);
     }
   }
   
@@ -313,14 +336,15 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
           ),
           // Adicionar botões de ação no canto superior direito
           if (_selectedEvent != null) ...[
-            // Botão do scanner
-            IconButton(
-              icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF667eea)),
-              onPressed: () => _showScannerDialog(),
-              tooltip: 'Scanner',
-              constraints: const BoxConstraints(),
-              padding: const EdgeInsets.all(8),
-            ),
+            // Botão do scanner (só se tiver permissão)
+            if (_permissions['scan'] == true)
+              IconButton(
+                icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF667eea)),
+                onPressed: () => _showScannerDialog(),
+                tooltip: 'Scanner',
+                constraints: const BoxConstraints(),
+                padding: const EdgeInsets.all(8),
+              ),
             // Botão de atualizar
             IconButton(
               icon: const Icon(Icons.refresh, color: Color(0xFF667eea)),
@@ -488,20 +512,36 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
 
 
   Widget _buildProductsTab() {
-    // Se não houver bilhetes nem extras, mostre mensagem
-    if (_tickets.isEmpty && _extras.isEmpty) {
+    // Verificar se tem permissão para ver tickets ou extras
+    final canSeeTickets = _permissions['tickets'] == true;
+    final canSeeExtras = _permissions['extras'] == true;
+    
+    // Filtrar produtos baseado nas permissions
+    final hasTicketsToShow = canSeeTickets && _tickets.isNotEmpty;
+    final hasExtrasToShow = canSeeExtras && _extras.isNotEmpty;
+    
+    // Se não tiver permissão para nada ou não houver produtos, mostre mensagem
+    if (!hasTicketsToShow && !hasExtrasToShow) {
+      String subtitle = 'Não há produtos disponíveis';
+      
+      if (!canSeeTickets && !canSeeExtras) {
+        subtitle = 'Este POS não tem permissão para vender produtos';
+      } else if (_tickets.isEmpty && _extras.isEmpty) {
+        subtitle = 'Não há bilhetes ou extras para este evento';
+      }
+      
       return _buildEmptyState(
         icon: Icons.shopping_basket,
         title: 'Nenhum produto disponível',
-        subtitle: 'Não há bilhetes ou extras para este evento',
+        subtitle: subtitle,
       );
     }
 
-    // Combinar bilhetes e extras em uma única lista
+    // Combinar bilhetes e extras em uma única lista (baseado em permissions)
     final List<Widget> productCards = [];
     
-      // Adicionar um título para os bilhetes se houver bilhetes disponíveis
-    if (_tickets.isNotEmpty) {
+    // Adicionar um título para os bilhetes se houver bilhetes disponíveis E tiver permissão
+    if (hasTicketsToShow) {
       productCards.add(
         const Padding(
           padding: EdgeInsets.only(bottom: 10),
@@ -520,11 +560,13 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
             ],
           ),
         ),
-      );      // Adicionar os cards de bilhetes
+      );
+      
+      // Adicionar os cards de bilhetes
       for (int i = 0; i < _tickets.length; i++) {
         final ticket = _tickets[i];
         // Último bilhete terá margem maior se houver extras
-        final margin = (i == _tickets.length - 1 && _extras.isNotEmpty) 
+        final margin = (i == _tickets.length - 1 && hasExtrasToShow) 
             ? const EdgeInsets.only(bottom: 24)
             : const EdgeInsets.only(bottom: 12);
             
@@ -545,8 +587,8 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
     
     // O espaçamento entre seções agora é gerenciado pelo margin dos cards
     
-    // Adicionar um título para os extras se houver extras disponíveis
-    if (_extras.isNotEmpty) {
+    // Adicionar um título para os extras se houver extras disponíveis E tiver permissão
+    if (hasExtrasToShow) {
       productCards.add(
         const Padding(
           padding: EdgeInsets.only(bottom: 10),
@@ -1202,29 +1244,31 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
                   });
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.history, color: Color(0xFF667eea)),
-                title: const Text('Histórico de Vendas', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.pop(context);
-                  
-                  // Validar se há evento selecionado
-                  if (_selectedEvent == null) {
-                    _showError('Selecione um evento primeiro');
-                    return;
-                  }
-                  
-                  // Navegar para histórico de vendas
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => POS2SalesHistoryView(
-                        eventId: _selectedEvent!.id,
+              // Histórico de Vendas (só se tiver permissão report)
+              if (_permissions['report'] == true)
+                ListTile(
+                  leading: const Icon(Icons.history, color: Color(0xFF667eea)),
+                  title: const Text('Histórico de Vendas', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    
+                    // Validar se há evento selecionado
+                    if (_selectedEvent == null) {
+                      _showError('Selecione um evento primeiro');
+                      return;
+                    }
+                    
+                    // Navegar para histórico de vendas
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => POS2SalesHistoryView(
+                          eventId: _selectedEvent!.id,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
+                    );
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.help_outline, color: Color(0xFF667eea)),
                 title: const Text('Pedir Ajuda', style: TextStyle(color: Colors.white)),

@@ -47,75 +47,13 @@ class _PosShopViewState extends State<PosShopView> {
 
   Future<void> checkPOS2Permissions() async {
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      final user = jsonDecode(prefs.getString('user') ?? '{}');
-      
-      // DEBUG: Imprimir estrutura completa do user
-      print('=== DEBUG POS2 PERMISSIONS ===');
-      print('User completo: ${jsonEncode(user)}');
-      print('User POS: ${user['pos']}');
-      if (user['pos'] != null) {
-        print('POS permission (singular): ${user['pos']['permission']}'); // CORRIGIDO
-        print('POS name: ${user['pos']['name']}');
-      }
-      print('===============================');
-      
-      final permissions = user['pos']?['permission']; // CORRIGIDO: singular
-      
-      // Verificar se tem permissão para tickets (vários formatos possíveis)
-      final hasTickets = permissions != null && 
-          (permissions['tickets'] == true || 
-           permissions['tickets'] == 1 ||
-           permissions['tickets'] == '1' ||  // STRING "1"
-           permissions['Tickets'] == true ||
-           permissions['Tickets'] == 1 ||
-           permissions['Tickets'] == '1');   // STRING "1"
-      
-      print('Has tickets permission: $hasTickets');
-      
-      if (hasTickets) {
-        // Se tem permissão para tickets, mostrar opção POS2
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showPOS2Option();
-        });
-      } else {
-        print('POS2: Este POS não tem permissão para bilhetes - usando sistema atual');
-      }
+      // SEMPRE ir direto para POS2 - as permissões controlam o que é mostrado lá dentro
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.pushReplacementNamed(context, '/pos2/modern');
+      });
     } catch (e) {
-      print('Erro ao verificar permissões POS2: $e');
+      print('Erro ao navegar para POS2: $e');
     }
-  }
-
-  void _showPOS2Option() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Sistema de Vendas'),
-          content: const Text(
-            'Você tem acesso ao novo POS 2.0 com funcionalidades avançadas de bilhetes e extras. Qual sistema deseja usar?'
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Continuar com sistema atual (só extras)
-              },
-              child: const Text('Sistema Atual\n(Só Extras)'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Navegar para POS2 Moderno
-                Navigator.pushReplacementNamed(context, '/pos2/modern');
-              },
-              child: const Text('POS 2.0\n(Avançado)'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   loadData() async {
