@@ -284,6 +284,113 @@ class _UniversalScannerState extends State<UniversalScanner> {
   Future<void> _handleWithdrawExtra(dynamic extra) async {
     if (_scannedTicket == null || _isProcessing) return;
     
+    final int qtyTotal = extra['qty'] ?? 0;
+    final int qtyUsed = extra['used'] ?? 0;
+    final int qtyAvailable = qtyTotal - qtyUsed;
+    
+    if (qtyAvailable <= 0) return;
+    
+    int quantityToWithdraw = 1;
+    
+    // Se tem mais de 1 disponível, mostrar popup para escolher quantidade
+    if (qtyAvailable > 1) {
+      quantityToWithdraw = await _showQuantityDialog(extra['name'], qtyAvailable) ?? 0;
+      if (quantityToWithdraw == 0) return; // Cancelou
+    }
+    
+    // Processar o withdraw
+    await _performWithdraw(extra, quantityToWithdraw);
+  }
+  
+  /// Mostrar dialog para escolher quantidade a levantar
+  Future<int?> _showQuantityDialog(String extraName, int maxQty) async {
+    return showDialog<int>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Column(
+            children: [
+              const Icon(Icons.shopping_bag, color: Color(0xFF667eea), size: 32),
+              const SizedBox(height: 12),
+              Text(
+                extraName,
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Quantas deseja levantar?',
+                style: TextStyle(color: Color(0xFFB0B0B0), fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              
+              // Grid de números (1, 2, 3, 4...)
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                alignment: WrapAlignment.center,
+                children: List.generate(maxQty > 5 ? 5 : maxQty, (index) {
+                  final qty = index + 1;
+                  return SizedBox(
+                    width: 50,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(qty),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3A3A3A),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: Text('$qty', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    ),
+                  );
+                }),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Botão "TODAS" destacado
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(maxQty),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF667eea),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text(
+                    'TODAS ($maxQty)',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(0),
+              child: const Text('Cancelar', style: TextStyle(color: Color(0xFFB0B0B0))),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+  /// Executar o withdraw com a quantidade especificada
+  Future<void> _performWithdraw(dynamic extra, int quantity) async {
+    if (_scannedTicket == null || _isProcessing) return;
+    
     final ticketCode = _scannedTicket!['ticket'];
     final extraId = extra['id'];
     
@@ -292,112 +399,67 @@ class _UniversalScannerState extends State<UniversalScanner> {
     setState(() => _isProcessing = true);
     
     try {
-      POS2DebugHelper.log('Levantando extra $extraId do bilhete $ticketCode');
+      POS2DebugHelper.log('Levantando $quantity x ${extra['name']} do bilhete $ticketCode');
       
-      // Chamar API com o código do bilhete e ID do extra
+      // Chamar API UMA VEZ com a quantidade especificada
+      final result = await POS2ApiService.withdrawExtra(ticketCode, extraId, quantity: quantity);
       
-      final result = await POS2ApiService.withdrawExtra(ticketCode, extraId);
-      
-      if (result['success']) {
-        // Atualizar o bilhete com os novos dados
-        if (result['data']?['ticket']?['extras'] != null) {
-          setState(() {
-            _scannedTicket = {
-              ..._scannedTicket!,
-              'extras': result['data']['ticket']['extras'],
-            };
-          });
-        } else {
-          // Fallback: atualizar localmente se o servidor não retornar extras atualizados
-          // Garantir que 'used' seja tratado como número
-          final int currentUsed = extra['used'] ?? 0;
-          final newUsedQuantity = currentUsed + 1;
-          
-          final updatedExtra = {
-            ...extra,
-            'used': newUsedQuantity,
-          };
-          
-          if (_scannedTicket!['extras'] is List) {
-            final List updatedExtras = List.from(_scannedTicket!['extras']);
-            final index = updatedExtras.indexWhere((e) => e['id'] == extra['id']);
-            if (index >= 0) {
-              updatedExtras[index] = updatedExtra;
-            }
-            
-            setState(() {
-              _scannedTicket = {
-                ..._scannedTicket!,
-                'extras': updatedExtras,
-              };
-            });
-          } else if (_scannedTicket!['extras'] is Map) {
-            final Map updatedExtras = Map.from(_scannedTicket!['extras']);
-            
-            // Encontrar a chave correta no mapa
-            String? targetKey;
-            updatedExtras.forEach((key, value) {
-              if (value['id'] == extra['id']) {
-                targetKey = key;
-              }
-            });
-            
-            if (targetKey != null) {
-              updatedExtras[targetKey!] = updatedExtra;
-            }
-            
-            setState(() {
-              _scannedTicket = {
-                ..._scannedTicket!,
-                'extras': updatedExtras,
-              };
-            });
-          }
-        }
-        
-        if (mounted) {
-          // Fechar o bilhete imediatamente
-          setState(() {
-            _scannedTicket = null;
-            _showExtras = false;
-            _availableExtras = [];
-          });
-          
-          // Mostrar mensagem de sucesso (fica visível enquanto scanner abre)
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '${extra['name']} levantado com sucesso!',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          );
-          
-          // Aguardar um momento e então abrir o scanner MyPOS
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) {
-              _openMyPosScanner();
-            }
-          });
-        }
-        
-        POS2DebugHelper.log('✅ Extra "${extra['name']}" levantado com sucesso!');
-      } else {
+      if (!result['success']) {
         throw Exception(result['message'] ?? 'Erro ao levantar extra');
       }
+      
+      // Atualizar dados com resposta do servidor
+      if (result['data']?['ticket']?['extras'] != null) {
+        setState(() {
+          _scannedTicket = {
+            ..._scannedTicket!,
+            'extras': result['data']['ticket']['extras'],
+          };
+        });
+      }
+      
+      if (mounted) {
+        // Fechar o bilhete imediatamente
+        setState(() {
+          _scannedTicket = null;
+          _showExtras = false;
+          _availableExtras = [];
+        });
+        
+        // Mostrar mensagem de sucesso
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    quantity == 1 
+                      ? '${extra['name']} levantado com sucesso!'
+                      : '$quantity x ${extra['name']} levantados com sucesso!',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+        
+        // Aguardar um momento e então abrir o scanner MyPOS
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            _openMyPosScanner();
+          }
+        });
+      }
+      
+      POS2DebugHelper.log('✅ $quantity x ${extra['name']} levantado(s) com sucesso!');
     } catch (e) {
       POS2DebugHelper.logError('Erro ao levantar extra', error: e);
       if (mounted) {
