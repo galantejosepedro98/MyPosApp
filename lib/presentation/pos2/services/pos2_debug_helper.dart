@@ -1,6 +1,6 @@
 /// Helper para debug e logging no POS2
 class POS2DebugHelper {
-  static const bool _debugMode = true; // Alterar para true durante desenvolvimento
+  static const bool _debugMode = false; // Alterar para true durante desenvolvimento
   
   /// Log de informações gerais
   static void log(String message) {
@@ -8,6 +8,12 @@ class POS2DebugHelper {
       // ignore: avoid_print
       print('[POS2] $message');
     }
+  }
+  
+  /// Log de informações CRÍTICAS (sempre imprime, mesmo em release)
+  static void logCritical(String message) {
+    // ignore: avoid_print
+    print('[POS2 CRITICAL] $message');
   }
   
   /// Log de chamadas de API
@@ -24,13 +30,12 @@ class POS2DebugHelper {
   
   /// Log de erros
   static void logError(String message, {dynamic error}) {
-    if (_debugMode) {
+    // SEMPRE imprimir erros, mesmo em release!
+    // ignore: avoid_print
+    print('[POS2 ERROR] $message');
+    if (error != null) {
       // ignore: avoid_print
-      print('[POS2 ERROR] $message');
-      if (error != null) {
-        // ignore: avoid_print
-        print('[POS2 ERROR] Details: $error');
-      }
+      print('[POS2 ERROR] Details: $error');
     }
   }
   

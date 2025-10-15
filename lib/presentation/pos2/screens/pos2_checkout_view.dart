@@ -219,6 +219,8 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
             amount: totalPrice,
             currency: MyPosCurrency.eur,
             reference: DateTime.now().millisecondsSinceEpoch.toString(),
+            printMerchantReceipt: false, // Não imprimir recibo merchant
+            printCustomerReceipt: true,  // Perguntar ao cliente se quer recibo
           );
           
           // Verificar se pagamento foi bem-sucedido

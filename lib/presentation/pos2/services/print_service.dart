@@ -92,12 +92,14 @@ class PrintService {
   /// Imprime um recibo formatado com base nos dados JSON (igual ao botão IMPRIMIR RECIBO TESTE)
   static Future<bool> _printFormattedReceipt(Map<String, dynamic> receiptData) async {
     try {
-      POS2DebugHelper.log('PrintService: Formatando recibo para impressão');
+      POS2DebugHelper.logCritical('PrintService: Formatando recibo para impressão');
+      POS2DebugHelper.logCritical('PrintService: receiptData keys = ${receiptData.keys.toList()}');
       
       // Inicializa o objeto de impressão
       final paper = MyPosPaper();
       
       // ----- CABEÇALHO -----
+      POS2DebugHelper.logCritical('PrintService: Adicionando CABEÇALHO...');
       // Nome da empresa centralizado
       final company = receiptData['company'] ?? {};
       paper.addText(company['name'] ?? 'Essencia Eventos e Comunicacao Unipessoal Lda', 
@@ -150,7 +152,10 @@ class PrintService {
           alignment: PrinterAlignment.center);
       
       // ----- ITENS DO PEDIDO -----
+      POS2DebugHelper.logCritical('PrintService: Adicionando ITENS...');
       final items = receiptData['items'] ?? [];
+      POS2DebugHelper.logCritical('PrintService: Total de items = ${items.length}');
+      
       for (var item in items) {
         // Título do produto
         final title = item['title'] ?? 'Produto';
@@ -174,6 +179,7 @@ class PrintService {
       paper.addSpace(1);
       
       // ----- TOTAIS E PAGAMENTO -----
+      POS2DebugHelper.logCritical('PrintService: Adicionando TOTAIS...');
       // Total
       final total = receiptData['amount_gross']?.toString() ?? '0.00';
       paper.addText("TOTAL: $total€", fontSize: 24, alignment: PrinterAlignment.center);
@@ -198,6 +204,7 @@ class PrintService {
       paper.addSpace(1);
       
       // ----- DETALHES DO IVA -----
+      POS2DebugHelper.logCritical('PrintService: Adicionando IVA...');
       paper.addText("--------------------------------", 
           alignment: PrinterAlignment.center);
       paper.addText("RESUMO IVA", 
@@ -249,8 +256,10 @@ class PrintService {
       }
       
       // ----- QR CODE -----
+      POS2DebugHelper.logCritical('PrintService: Adicionando QR CODE...');
       // Gerar e imprimir o QR code se disponível (com limitação de tamanho)
       final qrcodeData = receiptData['qrcode'] ?? receiptData['qrcode_data'] ?? '';
+      POS2DebugHelper.logCritical('PrintService: QR code length = ${qrcodeData.toString().length}');
       
       if (qrcodeData.isNotEmpty) {
         try {
@@ -278,13 +287,19 @@ class PrintService {
       }
       
       // Mensagem de agradecimento
+      POS2DebugHelper.logCritical('PrintService: Adicionando RODAPÉ...');
       paper.addText("Obrigado pela preferência!", alignment: PrinterAlignment.center);
       paper.addSpace(3);
       
+      POS2DebugHelper.logCritical('PrintService: Adicionando CUT LINE...');
       paper.addCutLine();
       
+      POS2DebugHelper.logCritical('PrintService: Paper preparado! Enviando para impressora...');
+      
       // Enviar para impressão
+      POS2DebugHelper.logCritical('PrintService: Enviando para impressora MyPOS...');
       final printResult = await MyPos.printPaper(paper);
+      POS2DebugHelper.logCritical('PrintService: Resultado MyPOS = $printResult');
       
       // Retornar sucesso/falha
       return printResult == PrintResponse.success;
@@ -311,10 +326,12 @@ class PrintService {
       // 2. SIMPLES! Verificar se temos dados limpos
       final dadosLimpos = receiptData['dados_limpos'];
       if (dadosLimpos != null) {
-        POS2DebugHelper.log('PrintService: DADOS LIMPOS detectados - impressão direta!');
+        POS2DebugHelper.logCritical('PrintService: DADOS LIMPOS detectados - impressão direta!');
         
         // Usar dados limpos diretamente - sem Base64, sem JSON decode!
         final printResult = await _printFormattedReceipt(dadosLimpos);
+        
+        POS2DebugHelper.logCritical('PrintService: Resultado impressão = $printResult');
         
         return {
           'success': printResult,

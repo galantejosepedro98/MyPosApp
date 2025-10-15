@@ -839,10 +839,18 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
     // Obter a quantidade ATUAL de extras standalone no carrinho
     final currentQuantity = _cartQuantities[id] ?? 0;
     
-    POS2DebugHelper.log('_updateQuantity: id=$id, current=$currentQuantity, new=$newQuantity, type=$type');
+    POS2DebugHelper.log('_updateQuantity INICIO: id=$id, current=$currentQuantity, new=$newQuantity, type=$type');
+    
+    // NÃO permitir quantidade negativa
+    if (newQuantity < 0) {
+      POS2DebugHelper.log('_updateQuantity: Quantidade negativa bloqueada!');
+      return;
+    }
     
     // Calcular a diferença
     final difference = newQuantity - currentQuantity;
+    
+    POS2DebugHelper.log('_updateQuantity: difference=$difference');
     
     if (difference == 0) return; // Nada mudou
     
@@ -896,14 +904,14 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
           final itemData = item['item'];
           
           if (type == 'ticket' && itemData['type'] == 'ticket' && itemData['ticket_id'] == id) {
-            cartService.removeItem(item['id']);
+            cartService.decrementItem(item['id']); // Decrementa 1 unidade
             removed = true;
             break;
           } else if (type == 'extra' && 
                      itemData['type'] == 'extra' && 
                      itemData['extra_id'] == id && 
                      itemData['ticket_id'] == null) { // IMPORTANTE: Só remove standalone
-            cartService.removeItem(item['id']);
+            cartService.decrementItem(item['id']); // Decrementa 1 unidade
             removed = true;
             break;
           }
@@ -916,8 +924,12 @@ class _POS2ModernDashboardState extends State<POS2ModernDashboard> {
       }
     }
     
+    POS2DebugHelper.log('_updateQuantity: Antes de _syncCartWithUI, _cartQuantities[$id] = ${_cartQuantities[id]}');
+    
     // Sincronizar UI com o estado real do carrinho
     _syncCartWithUI();
+    
+    POS2DebugHelper.log('_updateQuantity FIM: Depois de _syncCartWithUI, _cartQuantities[$id] = ${_cartQuantities[id]}');
   }
   
   // Nova barra persistente do carrinho

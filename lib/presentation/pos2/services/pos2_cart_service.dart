@@ -130,6 +130,21 @@ class POS2CartService {
     }
   }
 
+  /// Decrementar a quantidade de um item em 1 unidade
+  bool decrementItem(String id) {
+    try {
+      final item = _cartService.getItem(id);
+      if (item.isEmpty) {
+        return false;
+      }
+      // Decrementar apenas 1 unidade
+      return _cartService.updateQuantity(item, -1);
+    } catch (e) {
+      POS2DebugHelper.logError('POS2CartService ERROR: Falha ao decrementar item', error: e);
+      return false;
+    }
+  }
+
   /// Limpar o carrinho
   void clear() {
     _cartService.resetCart();
