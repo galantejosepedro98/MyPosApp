@@ -79,4 +79,8 @@ abstract class MyPosPlatform extends PlatformInterface {
   Future<String?> openScanner() {
     throw UnimplementedError('openScanner() has not been implemented.');
   }
+
+  Future<PrintResponse> printLastReceipt({bool printCustomerReceipt = true}) {
+    throw UnimplementedError('printLastReceipt() has not been implemented.');
+  }
 }

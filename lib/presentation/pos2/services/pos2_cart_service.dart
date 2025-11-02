@@ -197,6 +197,7 @@ class POS2CartService {
     String? customerName,
     String? customerEmail,
     String? customerPhone,
+    String? customerVatNumber,
     String? notes,
     bool sendSms = false,
     bool sendEmail = false,
@@ -262,7 +263,7 @@ class POS2CartService {
           'name': customerName ?? '',
           'email': customerEmail ?? '',
           'phone': customerPhone ?? '', // Enviar o número como está (o indicativo será adicionado pelo backend)
-          'vatNumber': '',
+          'vatNumber': customerVatNumber ?? '',
           'address': '',
         },
         'payment': {

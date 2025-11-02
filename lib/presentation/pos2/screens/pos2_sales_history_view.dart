@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_pos/my_pos.dart';
+import 'package:my_pos/enums/py_pos_print_response.dart';
 import '../services/pos2_api_service.dart';
 import '../services/pos2_debug_helper.dart';
 import '../services/print_service.dart';
@@ -319,6 +321,15 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
             padding: const EdgeInsets.all(8),
             constraints: const BoxConstraints(),
           ),
+          const SizedBox(width: 16),
+          // Botão de reimprimir último recibo
+          IconButton(
+            icon: const Icon(Icons.print, color: Colors.white, size: 20),
+            onPressed: _reprintLastReceipt,
+            tooltip: 'Reimprimir último recibo',
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(),
+          ),
         ],
       ),
     );
@@ -392,6 +403,90 @@ class _POS2SalesHistoryViewState extends State<POS2SalesHistoryView> {
     setState(() {
       _selectedDate = DateTime.now();
     });
+  }
+
+  Future<void> _reprintLastReceipt() async {
+    try {
+      // Mostrar diálogo de confirmação
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Reimprimir Último Recibo'),
+          content: const Text('Deseja reimprimir o recibo da última transação com cartão?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF667eea),
+              ),
+              child: const Text('Reimprimir'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true || !mounted) return;
+
+      // Mostrar loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Chamar o método do plugin MyPOS
+      final result = await MyPos.printLastReceipt(printCustomerReceipt: true);
+
+      if (!mounted) return;
+      Navigator.pop(context); // Fechar loading
+
+      // Mostrar resultado
+      String message;
+      Color color;
+      
+      switch (result) {
+        case PrintResponse.success:
+          message = 'Recibo reimpresso com sucesso!';
+          color = Colors.green;
+          break;
+        case PrintResponse.outOfPaper:
+          message = 'Sem papel na impressora';
+          color = Colors.orange;
+          break;
+        case PrintResponse.failed:
+        case PrintResponse.unknown:
+          message = 'Erro ao reimprimir recibo';
+          color = Colors.red;
+          break;
+      }
+
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: color,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Fechar loading se estiver aberto
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   Widget _buildOrdersList() {

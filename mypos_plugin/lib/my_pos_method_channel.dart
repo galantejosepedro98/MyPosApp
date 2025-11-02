@@ -167,6 +167,25 @@ class MethodChannelMyPos extends MyPosPlatform {
     return result;
   }
 
+  @override
+  Future<PrintResponse> printLastReceipt({bool printCustomerReceipt = true}) async {
+    final Map<String, dynamic> args = {
+      'printCustomerReceipt': printCustomerReceipt,
+    };
+    final res = await methodChannel.invokeMethod<String>('printLastReceipt', args);
+    switch (res) {
+      case 'SUCCESS':
+        return PrintResponse.success;
+      case 'FAILED':
+        return PrintResponse.failed;
+      case 'OUT_OF_PAPER':
+        return PrintResponse.outOfPaper;
+      case 'UNKNOWN':
+        return PrintResponse.unknown;
+    }
+    return PrintResponse.unknown;
+  }
+
   static int getSamSlot(SamSlot samSlot) {
     switch (samSlot) {
       case SamSlot.slot_1:

@@ -283,6 +283,7 @@ class _POS2CheckoutViewState extends State<POS2CheckoutView> {
         customerName: _customerNameController.text.trim(),
         customerEmail: _customerEmailController.text.trim(),
         customerPhone: fullPhoneNumber ?? _customerPhoneController.text.trim(),
+        customerVatNumber: _customerVatNumberController.text.trim(),
         notes: _notesController.text.trim(),
         sendSms: _sendToPhone,
         sendEmail: _sendToMail,

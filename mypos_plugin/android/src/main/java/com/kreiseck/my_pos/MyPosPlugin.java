@@ -208,6 +208,21 @@ public class MyPosPlugin implements FlutterPlugin, MethodCallHandler, ActivityAw
       // Send broadcast to open scanner
       Intent intent = new Intent(MyPOSUtil.SCANNER_BROADCAST);
       MyPOSAPI.sendExplicitBroadcast(activity, intent);
+    } else if (call.method.equals("printLastReceipt")) {
+      pendingResult = result;
+      // Register printer receiver for result
+      activity.registerReceiver(myReceiver, new IntentFilter(MyPOSUtil.PRINTING_DONE_BROADCAST));
+      
+      // Get parameter for customer receipt (default true)
+      Boolean printCustomerReceipt = call.argument("printCustomerReceipt");
+      if (printCustomerReceipt == null) {
+        printCustomerReceipt = true;
+      }
+      
+      // Send broadcast to print last receipt
+      Intent intent = new Intent(MyPOSUtil.PRINT_LAST_RECEIPT_BROADCAST);
+      intent.putExtra("print_customer_receipt", printCustomerReceipt);
+      MyPOSAPI.sendExplicitBroadcast(activity, intent);
     } else {
       result.notImplemented();
     }

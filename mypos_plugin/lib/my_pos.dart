@@ -75,4 +75,8 @@ class MyPos {
   static Future<String?> openScanner() async {
     return MyPosPlatform.instance.openScanner();
   }
+
+  static Future<PrintResponse> printLastReceipt({bool printCustomerReceipt = true}) async {
+    return MyPosPlatform.instance.printLastReceipt(printCustomerReceipt: printCustomerReceipt);
+  }
 }
